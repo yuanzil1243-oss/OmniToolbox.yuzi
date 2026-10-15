@@ -1,4 +1,24 @@
-# 按键出售（Yuzi）
+# OmniToolbox.yuzi
+
+Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
+
+## 模块列表
+
+- **快捷出售**（QuickSell）— 按住选中的 Alt、Ctrl、Shift 修饰键并右键单击物品，在 NPC 商店或雇员出售界面执行游戏原生出售动作；可选自动确认本次出售触发的贵重物品确认框。
+
+## 在 Omni 中添加
+
+在「插件设置 → 在线模块」中填写清单地址：
+
+```
+https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHouseModules.json
+```
+
+首次安装后模块默认关闭，请在「树树妙妙屋 → 在线」中手动启用。
+
+## 开发约定
+
+模块源码统一放在 `Modules/`，版本文件固定使用根目录 `TreeHouseModules.json`。新增模块时在清单中追加条目，并填写源码相对路径与 SHA256。
 
 Omni Toolbox 在线模块。默认按住 **Shift＋鼠标右键单击**背包物品，自动选择游戏原生菜单的“出售”或“让雇员出售”。设置支持 Alt、Ctrl、Shift 的非空组合，需同时按住所选键。
 

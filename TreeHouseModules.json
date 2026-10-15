@@ -8,7 +8,7 @@
       "Description": "按住修饰键右键单击物品，调用商店或雇员的原生系统出售动作。",
       "Version": "0.2.4",
       "MinimumOmniVersion": "1.1.6.6",
-      "File": "SellOnClick.cs",
+      "File": "Modules/QuickSell.cs",
       "Sha256": "D2F6E413D34112FC1BDC83E03F603DA3916C38DC16285824AACE7E2238B3A7CD"
     }
   ]
