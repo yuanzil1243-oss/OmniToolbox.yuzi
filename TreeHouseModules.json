@@ -16,10 +16,10 @@
       "Name": "极限技调整",
       "Author": "Yuzi",
       "Description": "调整极限技条的旋转、间距和文本显示。",
-      "Version": "0.1.1",
+      "Version": "0.1.2",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/LimitBreakAdjustments.cs",
-      "Sha256": "817C320381CA59804250AC83D68AB90A53965D9DEBA59EF0942BA335265995BC"
+      "Sha256": "B5149098666A6C9ECD14F9CB006C936656B1042BE06DC21F3F4DBB5585FEFC59"
     }
   ]
 }

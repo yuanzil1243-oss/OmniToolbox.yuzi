@@ -55,7 +55,11 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
         changed |= ImGui.DragFloat2("文本位置", ref config.TextPosition);
         if (changed) SaveConfig();
         if (ImGui.Checkbox("预览三条极限技", ref preview))
+        {
+            if (!preview && previewFrames > 0)
+                LimitBreakController.Instance()->BarCount = previousBarCount;
             previewFrames = 0;
+        }
         if (preview)
         {
             if (previewFrames == 0) previousBarCount = LimitBreakController.Instance()->BarCount;
