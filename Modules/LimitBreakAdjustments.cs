@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Numerics;
+using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -14,6 +16,7 @@ namespace OmniToolbox.LimitBreakAdjustmentsOnline;
 
 public sealed unsafe class LimitBreakAdjustments : ModuleBase
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly LimitBreakConfig config = new();
     private bool preview;
     private byte previewFrames;
@@ -26,7 +29,11 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
     };
     public override bool HasSettings => true;
 
-    protected override void OnEnable() => DalamudServices.Framework.Update += OnFrameworkUpdate;
+    protected override void OnEnable()
+    {
+        LoadConfig();
+        DalamudServices.Framework.Update += OnFrameworkUpdate;
+    }
 
     protected override void OnDisable()
     {
@@ -46,8 +53,9 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
         changed |= ImGui.DragFloat2("极限技条间距", ref config.BarSpacing);
         changed |= ImGui.Checkbox("隐藏文本", ref config.HideText);
         changed |= ImGui.DragFloat2("文本位置", ref config.TextPosition);
+        if (changed) SaveConfig();
         if (ImGui.Checkbox("预览三条极限技", ref preview))
-            changed = true;
+            previewFrames = 0;
         if (preview)
         {
             if (previewFrames == 0) previousBarCount = LimitBreakController.Instance()->BarCount;
@@ -65,6 +73,36 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
             LimitBreakController.Instance()->BarCount = previousBarCount;
         }
         Apply(config);
+    }
+
+    private static string ConfigPath => Path.Combine(
+        DalamudServices.PluginInterface.GetPluginConfigDirectory(), "LimitBreakAdjustments.json");
+
+    private void LoadConfig()
+    {
+        try
+        {
+            var path = ConfigPath;
+            if (!File.Exists(path)) return;
+            var saved = JsonSerializer.Deserialize<LimitBreakConfig>(File.ReadAllText(path), JsonOptions);
+            if (saved == null) return;
+            config.BarRotation = saved.BarRotation;
+            config.BarSpacing = saved.BarSpacing;
+            config.TextPosition = saved.TextPosition;
+            config.HideText = saved.HideText;
+        }
+        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取极限技调整配置失败"); }
+    }
+
+    private void SaveConfig()
+    {
+        try
+        {
+            var path = ConfigPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
+        }
+        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存极限技调整配置失败"); }
     }
 
     private static void Apply(LimitBreakConfig value)
