@@ -1,15 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
 using OmenTools.OmenService;
+using OmenTools.OmenService.Abstractions;
 using OmenTools.Extensions;
 using FfxivAchievement = FFXIVClientStructs.FFXIV.Client.Game.UI.Achievement;
 using LuminaAchievement = Lumina.Excel.Sheets.Achievement;
@@ -26,7 +28,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly AchievementTrackerConfig config = new();
     private readonly Dictionary<uint, AchievementProgress> progress = new();
     private readonly Queue<uint> requests = new();
-    private Hook<ReceiveAchievementProgressDelegate>? progressHook;
+    private Dalamud.Hooking.Hook<ReceiveAchievementProgressDelegate>? progressHook;
+    private AchievementContextMenuEntry? contextMenuEntry;
     private string currentRegion = "";
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
@@ -46,6 +49,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progressHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
+        contextMenuEntry = new AchievementContextMenuEntry(this);
+        OmenServiceBase<ContextMenuManager>.Instance().Reg(contextMenuEntry);
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         QueueProgressRequests();
@@ -56,6 +61,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
+        if (contextMenuEntry != null)
+            OmenServiceBase<ContextMenuManager>.Instance().Unreg(contextMenuEntry);
+        contextMenuEntry = null;
         progressHook?.Dispose();
         progressHook = null;
         progress.Clear();
@@ -120,6 +128,57 @@ public sealed unsafe class AchievementTracker : ModuleBase
         requests.Clear();
         foreach (var id in config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id).Distinct())
             requests.Enqueue(id);
+    }
+
+    private sealed class AchievementContextMenuEntry(AchievementTracker module) : ContextMenuEntry
+    {
+        public override string Identifier => "AchievementTracker";
+
+        public unsafe override ContextMenuItem? Create(ContextMenuOpenedArgs args)
+        {
+            if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal))
+                return null;
+
+            var agent = AgentAchievement.Instance();
+            if (agent == null || agent->ContextMenuSelectedItemId == 0)
+                return null;
+
+            var achievementId = agent->ContextMenuSelectedItemId;
+            var submenuEntries = new List<ContextMenuEntry>(module.config.Goals.Count);
+            for (var index = 0; index < module.config.Goals.Count; index++)
+            {
+                var slot = index;
+                submenuEntries.Add(new ContextMenuEntryInfo(
+                    $"AchievementTracker.Target{slot + 1}",
+                    _ => new ContextMenuItem
+                    {
+                        Name = $"目标 {slot + 1}",
+                        OnClicked = _ => module.SetGoalFromMenu(slot, achievementId),
+                    }));
+            }
+
+            return new ContextMenuItem
+            {
+                Name = "添加到成就追踪",
+                Priority = -1,
+                Submenu = new ContextMenuSubmenu
+                {
+                    Title = "添加到成就追踪",
+                    Entries = submenuEntries,
+                },
+            };
+        }
+    }
+
+    private void SetGoalFromMenu(int slot, uint achievementId)
+    {
+        if (slot < 0 || slot >= config.Goals.Count || achievementId == 0) return;
+        config.Goals[slot].Id = (int)achievementId;
+        config.Goals[slot].Enabled = true;
+        config.Goals[slot].IgnoreRegion = true;
+        config.Goals[slot].Region = "";
+        SaveConfig();
+        QueueProgressRequests();
     }
 
     private void OnFrameworkUpdate(IFramework framework)
