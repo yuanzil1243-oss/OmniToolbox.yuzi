@@ -37,7 +37,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持地区限制和本地保存。"
+        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持按原生 ID 或名称识别。"
     };
     public override bool HasSettings => true;
 
@@ -183,11 +183,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 return null;
 
             var openedAchievementId = module.ReadCurrentContextAchievementId();
+            var openedAchievementName = args.TargetName;
             return new ContextMenuItem
             {
                 Name = "添加到成就追踪",
                 Priority = -1,
-                OnClicked = _ => module.AddGoalFromContext(openedAchievementId),
+                OnClicked = _ => module.AddGoalFromContext(openedAchievementId, openedAchievementName),
             };
         }
     }
@@ -198,12 +199,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return agent == null ? 0 : agent->ContextMenuSelectedItemId;
     }
 
-    private void AddGoalFromContext(uint openedAchievementId)
+    private void AddGoalFromContext(uint openedAchievementId, string? openedAchievementName)
     {
         var achievementId = openedAchievementId != 0 ? openedAchievementId : ReadCurrentContextAchievementId();
+        if (achievementId == 0 && !string.IsNullOrWhiteSpace(openedAchievementName))
+            achievementId = ResolveAchievementIdByName(openedAchievementName);
+
         if (achievementId == 0)
         {
-            DalamudServices.PluginLog.Warning("成就追踪：右键菜单点击时未读取到原生成就 ID");
+            DalamudServices.PluginLog.Warning($"成就追踪：未能解析右键目标成就，名称为“{openedAchievementName ?? "[空]"}”");
             return;
         }
 
@@ -216,6 +220,24 @@ public sealed unsafe class AchievementTracker : ModuleBase
         });
         SaveConfig();
         QueueProgressRequests();
+    }
+
+    private static uint ResolveAchievementIdByName(string targetName)
+    {
+        var sheet = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>();
+        var exactMatches = sheet
+            .Where(row => string.Equals(row.Name.ToString(), targetName, StringComparison.Ordinal))
+            .Select(row => row.RowId)
+            .ToArray();
+        if (exactMatches.Length == 0)
+            return 0;
+
+        if (exactMatches.Length > 1)
+        {
+            DalamudServices.PluginLog.Warning(
+                $"成就追踪：名称“{targetName}”匹配到 {exactMatches.Length} 个成就，使用第一个 ID {exactMatches[0]}");
+        }
+        return exactMatches[0];
     }
 
     private void OnFrameworkUpdate(IFramework framework)
