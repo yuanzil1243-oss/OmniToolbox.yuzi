@@ -120,28 +120,23 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 break;
             }
 
-            if (ImGui.BeginTable("##achievement-goal", 1, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
-            {
-                ImGui.TableSetupColumn("##goal-content", ImGuiTableColumnFlags.WidthStretch);
+            ImGui.Indent(12);
+            ImGui.TextUnformatted("成就名称");
+            changed |= DrawAchievementPicker(i, goal);
 
-                ImGui.TableNextRow();
-                ImGui.TextUnformatted("名称");
-                ImGui.SameLine();
-                changed |= DrawAchievementPicker(i, goal);
+            ImGui.TextUnformatted("达成条件");
+            ImGui.Indent(12);
+            DrawAchievementProgress(goal);
+            ImGui.Unindent(12);
 
-                ImGui.TableNextRow();
-                ImGui.TextUnformatted("达成条件");
-                ImGui.SameLine();
-                DrawAchievementProgress(goal);
-
-                ImGui.TableNextRow();
-                ImGui.TextUnformatted("地区限制");
-                ImGui.SameLine();
-                changed |= DrawTerritoryPicker(i, goal);
-                ImGui.SameLine();
-                changed |= ImGui.InputText("备注", ref goal.Note, 128);
-                ImGui.EndTable();
-            }
+            ImGui.TextUnformatted("地区限制");
+            ImGui.Indent(12);
+            changed |= DrawTerritoryPicker(i, goal);
+            ImGui.TextUnformatted("备注");
+            ImGui.SameLine();
+            changed |= ImGui.InputText("##note", ref goal.Note, 128);
+            ImGui.Unindent(12);
+            ImGui.Unindent(12);
             ImGui.Separator();
             ImGui.PopID();
         }
@@ -164,8 +159,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
         var name = row.HasValue ? row.Value.Name.ToString() : goal.Name;
         if (string.IsNullOrWhiteSpace(name)) name = "选择成就…";
 
-        if (ImGui.Button($"{name}##achievement-picker"))
-            ImGui.OpenPopup("AchievementPicker");
+        var popupId = $"AchievementPicker-{index}";
+        if (ImGui.Button($"{name}##achievement-picker", new System.Numerics.Vector2(-1, 0)))
+            ImGui.OpenPopup(popupId);
         if (row.HasValue)
         {
             ImGui.TextDisabled($"ID: {row.Value.RowId}");
@@ -180,7 +176,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextDisabled("待匹配名称，可在上方搜索框重新选择");
         }
 
-        if (ImGui.BeginPopup("AchievementPicker"))
+        if (ImGui.BeginPopup(popupId))
         {
             achievementSearch.TryGetValue(index, out var query);
             query ??= goal.Name ?? "";
@@ -250,11 +246,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         if (goal.IgnoreRegion) return changed;
 
         var label = goal.RegionId > 0
-            ? $"{goal.RegionGroup} / {goal.Region}##territory-picker"
-            : "选择地区…##territory-picker";
-        if (ImGui.Button(label)) ImGui.OpenPopup("TerritoryPicker");
+            ? $"{goal.RegionGroup} / {goal.Region}##territory-picker-{index}"
+            : $"选择地区…##territory-picker-{index}";
+        var popupId = $"TerritoryPicker-{index}";
+        if (ImGui.Button(label, new System.Numerics.Vector2(-1, 0))) ImGui.OpenPopup(popupId);
 
-        if (ImGui.BeginPopup("TerritoryPicker"))
+        if (ImGui.BeginPopup(popupId))
         {
             territorySearch.TryGetValue(index, out var query);
             query ??= "";
@@ -328,7 +325,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
             var regionAllowed = goal.IgnoreRegion
                 || (goal.RegionId > 0 && goal.RegionId == currentTerritoryId)
                 || (goal.RegionId <= 0 && (string.IsNullOrWhiteSpace(goal.Region) || string.Equals(goal.Region, currentRegion, StringComparison.OrdinalIgnoreCase)));
-            if (!goal.Enabled || goal.Id <= 0 || !regionAllowed) continue;
+            if (!goal.Enabled || !regionAllowed) continue;
+            if (goal.Id <= 0)
+            {
+                ImGui.Separator();
+                ImGui.TextUnformatted(string.IsNullOrWhiteSpace(goal.Name) ? "未选择成就" : goal.Name);
+                ImGui.TextDisabled("待匹配成就：请在模块设置中选择原生成就");
+                if (!string.IsNullOrWhiteSpace(goal.Note)) ImGui.TextDisabled(goal.Note);
+                continue;
+            }
             progress.TryGetValue((uint)goal.Id, out var state);
             var completed = state.Max > 0 && state.Current >= state.Max;
             if (!config.ShowCompleted && completed) continue;
@@ -448,9 +453,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        if (!DService.Instance().ClientState.IsLoggedIn || requests.Count == 0) return;
+        var achievement = FfxivAchievement.Instance();
+        if (achievement != null && achievement->ProgressAchievementId != 0
+            && achievement->ProgressRequestState == FfxivAchievement.AchievementState.Loaded)
+        {
+            progress[achievement->ProgressAchievementId] = new(achievement->ProgressCurrent, achievement->ProgressMax);
+        }
+
+        if (!DService.Instance().ClientState.IsLoggedIn || requests.Count == 0 || achievement == null) return;
         var id = requests.Dequeue();
-        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestAchievement, id);
+        achievement->RequestAchievementProgress(id);
     }
 
     private void ReceiveAchievementProgress(FfxivAchievement* achievement, uint id, uint current, uint max)
