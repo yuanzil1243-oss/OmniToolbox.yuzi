@@ -95,21 +95,11 @@ public sealed unsafe class AchievementTracker : ModuleBase
         {
             var goal = config.Goals[i];
             ImGui.PushID(i);
+            changed |= DrawGoalDragHandle(i);
+            ImGui.SameLine();
             changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
             ImGui.SameLine();
             ImGui.TextUnformatted($"目标 {i + 1}");
-            ImGui.SameLine();
-            if (ImGui.SmallButton("上移") && i > 0)
-            {
-                (config.Goals[i - 1], config.Goals[i]) = (config.Goals[i], config.Goals[i - 1]);
-                changed = true;
-            }
-            ImGui.SameLine();
-            if (ImGui.SmallButton("下移") && i + 1 < config.Goals.Count)
-            {
-                (config.Goals[i + 1], config.Goals[i]) = (config.Goals[i], config.Goals[i + 1]);
-                changed = true;
-            }
             ImGui.SameLine();
             var remove = ImGui.SmallButton("删除");
             if (remove)
@@ -153,13 +143,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private bool DrawAchievementPicker(int index, AchievementGoal goal)
     {
         var changed = false;
+        var popupId = $"AchievementPicker-{index}";
+        achievementSearch.TryGetValue(index, out var query);
+        query ??= goal.Name ?? "";
         var row = goal.Id > 0
             ? DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id)
             : null;
         var name = row.HasValue ? row.Value.Name.ToString() : goal.Name;
         if (string.IsNullOrWhiteSpace(name)) name = "选择成就…";
 
-        var popupId = $"AchievementPicker-{index}";
         if (ImGui.Button($"{name}##achievement-picker", new System.Numerics.Vector2(-1, 0)))
             ImGui.OpenPopup(popupId);
         if (row.HasValue)
@@ -176,29 +168,33 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextDisabled("待匹配名称，可在上方搜索框重新选择");
         }
 
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 420), ImGuiCond.Always);
-        ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 260), new System.Numerics.Vector2(700, 560));
+        var popupOpen = ImGui.IsPopupOpen(popupId);
+        var matches = popupOpen
+            ? DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>()
+                .Where(candidate => MatchesSearch(query, candidate.RowId, candidate.Name.ToString(), GetAchievementCategory(candidate)))
+                .Take(200)
+                .ToList()
+            : new List<LuminaAchievement>();
+        var childHeight = popupOpen ? SearchResultsHeight(matches.Count, 280) : 280;
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, childHeight + 60), ImGuiCond.Always);
+        ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 120), new System.Numerics.Vector2(700, 560));
         if (ImGui.BeginPopup(popupId))
         {
-            achievementSearch.TryGetValue(index, out var query);
-            query ??= goal.Name ?? "";
             ImGui.SetNextItemWidth(-1);
             ImGui.InputText("搜索名称 / ID", ref query, 128);
             achievementSearch[index] = query;
 
-            if (ImGui.BeginChild("##achievement-results", new System.Numerics.Vector2(-1, 280), true))
+            if (ImGui.BeginChild("##achievement-results", new System.Numerics.Vector2(-1, childHeight), true))
             {
                 if (ImGui.BeginTable("##achievement-result-table", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
                     ImGui.TableSetupColumn("成就名称", ImGuiTableColumnFlags.WidthStretch, 1.3f);
                     ImGui.TableSetupColumn("分类", ImGuiTableColumnFlags.WidthStretch, 1.0f);
                     ImGui.TableHeadersRow();
-                    var shown = 0;
-                    foreach (var candidate in DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>())
+                    foreach (var candidate in matches)
                     {
                         var candidateName = candidate.Name.ToString();
                         var category = GetAchievementCategory(candidate);
-                        if (!MatchesSearch(query, candidate.RowId, candidateName, category)) continue;
                         ImGui.TableNextRow();
                         ImGui.TableSetColumnIndex(0);
                         if (ImGui.Selectable($"{candidateName}##achievement-{index}-{candidate.RowId}", goal.Id == candidate.RowId))
@@ -209,7 +205,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
                         }
                         ImGui.TableSetColumnIndex(1);
                         ImGui.TextDisabled(category);
-                        if (++shown >= 200) break;
                     }
                     ImGui.EndTable();
                 }
@@ -247,22 +242,35 @@ public sealed unsafe class AchievementTracker : ModuleBase
         var changed = ImGui.Checkbox("不限制地区", ref goal.IgnoreRegion);
         if (goal.IgnoreRegion) return changed;
 
+        var popupId = $"TerritoryPicker-{index}";
+        territorySearch.TryGetValue(index, out var query);
+        query ??= "";
+
         var label = goal.RegionId > 0
             ? $"{goal.RegionGroup} / {goal.Region}##territory-picker-{index}"
             : $"选择地区…##territory-picker-{index}";
-        var popupId = $"TerritoryPicker-{index}";
         if (ImGui.Button(label, new System.Numerics.Vector2(-1, 0))) ImGui.OpenPopup(popupId);
 
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 400), ImGuiCond.Always);
-        ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 240), new System.Numerics.Vector2(700, 520));
+        var popupOpen = ImGui.IsPopupOpen(popupId);
+        var matches = popupOpen
+            ? DalamudServices.DataManager.GetExcelSheet<TerritoryType>()
+                .Select(candidate => new TerritorySearchResult(
+                    candidate,
+                    candidate.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "",
+                    candidate.PlaceName.ValueNullable?.Name.ToString() ?? ""))
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Area)
+                    && MatchesSearch(query, candidate.Row.RowId, candidate.Group, candidate.Area))
+                .ToList()
+            : new List<TerritorySearchResult>();
+        var childHeight = popupOpen ? SearchResultsHeight(matches.Count, 240) : 240;
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, childHeight + 60), ImGuiCond.Always);
+        ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 120), new System.Numerics.Vector2(700, 520));
         if (ImGui.BeginPopup(popupId))
         {
-            territorySearch.TryGetValue(index, out var query);
-            query ??= "";
             ImGui.SetNextItemWidth(-1);
             ImGui.InputText("搜索地区 / ID", ref query, 128);
             territorySearch[index] = query ?? "";
-            if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(-1, 240), true))
+            if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(-1, childHeight), true))
             {
                 if (ImGui.BeginTable("##territory-result-table", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
@@ -270,23 +278,22 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     ImGui.TableSetupColumn("地区", ImGuiTableColumnFlags.WidthStretch);
                     ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 60);
                     ImGui.TableHeadersRow();
-                    foreach (var candidate in DalamudServices.DataManager.GetExcelSheet<TerritoryType>())
+                    foreach (var candidate in matches)
                     {
-                        var group = candidate.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "";
-                        var area = candidate.PlaceName.ValueNullable?.Name.ToString() ?? "";
-                        if (string.IsNullOrWhiteSpace(area) || !MatchesSearch(query, candidate.RowId, group, area)) continue;
+                        var group = candidate.Group;
+                        var area = candidate.Area;
                         ImGui.TableNextRow();
                         ImGui.TableSetColumnIndex(0); ImGui.TextUnformatted(group);
                         ImGui.TableSetColumnIndex(1);
-                        if (ImGui.Selectable($"{area}##territory-{index}-{candidate.RowId}", goal.RegionId == candidate.RowId))
+                        if (ImGui.Selectable($"{area}##territory-{index}-{candidate.Row.RowId}", goal.RegionId == candidate.Row.RowId))
                         {
-                            goal.RegionId = (int)candidate.RowId;
+                            goal.RegionId = (int)candidate.Row.RowId;
                             goal.RegionGroup = group;
                             goal.Region = area;
                             changed = true;
                             ImGui.CloseCurrentPopup();
                         }
-                        ImGui.TableSetColumnIndex(2); ImGui.TextDisabled(candidate.RowId.ToString());
+                        ImGui.TableSetColumnIndex(2); ImGui.TextDisabled(candidate.Row.RowId.ToString());
                     }
                     ImGui.EndTable();
                 }
@@ -305,6 +312,50 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return values.Any(value => value.Contains(text, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static float SearchResultsHeight(int resultCount, float maximumHeight)
+    {
+        var rowHeight = ImGui.GetFrameHeightWithSpacing();
+        var desiredHeight = (resultCount + 1) * rowHeight + ImGui.GetStyle().ItemSpacing.Y;
+        return Math.Clamp(desiredHeight, rowHeight * 2, maximumHeight);
+    }
+
+    private bool DrawGoalDragHandle(int index)
+    {
+        ImGui.SmallButton("≡");
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("拖动以调整顺序");
+
+        if (ImGui.BeginDragDropSource())
+        {
+            var payload = BitConverter.GetBytes(index);
+            ImGui.SetDragDropPayload("ACHIEVEMENT_GOAL", payload);
+            ImGui.TextUnformatted($"目标 {index + 1}");
+            ImGui.EndDragDropSource();
+        }
+
+        var changed = false;
+        if (ImGui.BeginDragDropTarget())
+        {
+            var payload = ImGui.AcceptDragDropPayload("ACHIEVEMENT_GOAL");
+            if (!payload.IsNull && payload.IsDelivery() && payload.DataSize >= sizeof(int))
+            {
+                var sourceIndex = System.Runtime.InteropServices.Marshal.ReadInt32((nint)payload.Data);
+                if (sourceIndex >= 0 && sourceIndex < config.Goals.Count && sourceIndex != index)
+                {
+                    var moved = config.Goals[sourceIndex];
+                    config.Goals.RemoveAt(sourceIndex);
+                    var destinationIndex = sourceIndex < index ? index - 1 : index;
+                    config.Goals.Insert(destinationIndex, moved);
+                    achievementSearch.Clear();
+                    territorySearch.Clear();
+                    changed = true;
+                }
+            }
+            ImGui.EndDragDropTarget();
+        }
+
+        return changed;
+    }
+
     private static void SetAchievement(AchievementGoal goal, LuminaAchievement row)
     {
         goal.Id = (int)row.RowId;
@@ -316,6 +367,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         return row.AchievementCategory.ValueNullable?.Name.ToString() ?? "未分类";
     }
+
+    private readonly record struct TerritorySearchResult(TerritoryType Row, string Group, string Area);
 
     private void DrawOverlay()
     {
