@@ -31,13 +31,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private Dalamud.Hooking.Hook<ReceiveAchievementProgressDelegate>? progressHook;
     private AchievementContextMenuEntry? contextMenuEntry;
     private string currentRegion = "";
+    private uint currentTerritoryId;
+    private readonly Dictionary<int, string> achievementSearch = new();
+    private readonly Dictionary<int, string> territorySearch = new();
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
 
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持按原生 ID 或名称识别。"
+        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持按原生 ID 或名称识别和地区筛选。"
     };
     public override bool HasSettings => true;
 
@@ -74,7 +77,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         var changed = false;
         ImGui.TextUnformatted("成就目标列表");
-        ImGui.TextDisabled("右键成就条目可直接加入列表；名称、进度和最大值由游戏原生系统读取。");
+        ImGui.TextDisabled("每个条目独立保存。名称、分类、目标条件和进度由游戏原生成就数据读取。");
         if (ImGui.Button("添加空白目标"))
         {
             config.Goals.Add(new AchievementGoal());
@@ -117,14 +120,28 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 break;
             }
 
-            changed |= ImGui.InputInt("成就 ID", ref goal.Id);
-            if (goal.Id > 0)
+            if (ImGui.BeginTable("##achievement-goal", 1, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
             {
-                var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
-                ImGui.TextDisabled(row.HasValue ? row.Value.Name.ToString() : "无效成就 ID");
+                ImGui.TableSetupColumn("##goal-content", ImGuiTableColumnFlags.WidthStretch);
+
+                ImGui.TableNextRow();
+                ImGui.TextUnformatted("名称");
+                ImGui.SameLine();
+                changed |= DrawAchievementPicker(i, goal);
+
+                ImGui.TableNextRow();
+                ImGui.TextUnformatted("达成条件");
+                ImGui.SameLine();
+                DrawAchievementProgress(goal);
+
+                ImGui.TableNextRow();
+                ImGui.TextUnformatted("地区限制");
+                ImGui.SameLine();
+                changed |= DrawTerritoryPicker(i, goal);
+                ImGui.SameLine();
+                changed |= ImGui.InputText("备注", ref goal.Note, 128);
+                ImGui.EndTable();
             }
-            changed |= ImGui.InputText("地区（留空为不限制）", ref goal.Region, 64);
-            changed |= ImGui.Checkbox("不限制地区", ref goal.IgnoreRegion);
             ImGui.Separator();
             ImGui.PopID();
         }
@@ -138,6 +155,167 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return changed;
     }
 
+    private bool DrawAchievementPicker(int index, AchievementGoal goal)
+    {
+        var changed = false;
+        var row = goal.Id > 0
+            ? DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id)
+            : null;
+        var name = row.HasValue ? row.Value.Name.ToString() : goal.Name;
+        if (string.IsNullOrWhiteSpace(name)) name = "选择成就…";
+
+        if (ImGui.Button($"{name}##achievement-picker"))
+            ImGui.OpenPopup("AchievementPicker");
+        if (row.HasValue)
+        {
+            ImGui.TextDisabled($"ID: {row.Value.RowId}");
+            ImGui.TextDisabled(GetAchievementCategory(row.Value));
+        }
+        else if (goal.Id > 0)
+        {
+            ImGui.TextDisabled($"无效成就 ID: {goal.Id}");
+        }
+        else if (!string.IsNullOrWhiteSpace(goal.Name))
+        {
+            ImGui.TextDisabled("待匹配名称，可在上方搜索框重新选择");
+        }
+
+        if (ImGui.BeginPopup("AchievementPicker"))
+        {
+            achievementSearch.TryGetValue(index, out var query);
+            query ??= goal.Name ?? "";
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputText("搜索名称 / ID", ref query, 128);
+            achievementSearch[index] = query;
+
+            if (ImGui.BeginChild("##achievement-results", new System.Numerics.Vector2(0, 260), true))
+            {
+                if (ImGui.BeginTable("##achievement-result-table", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+                {
+                    ImGui.TableSetupColumn("成就名称", ImGuiTableColumnFlags.WidthStretch, 1.3f);
+                    ImGui.TableSetupColumn("分类", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+                    ImGui.TableHeadersRow();
+                    var shown = 0;
+                    foreach (var candidate in DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>())
+                    {
+                        var candidateName = candidate.Name.ToString();
+                        var category = GetAchievementCategory(candidate);
+                        if (!MatchesSearch(query, candidate.RowId, candidateName, category)) continue;
+                        ImGui.TableNextRow();
+                        ImGui.TableSetColumnIndex(0);
+                        if (ImGui.Selectable($"{candidateName}##achievement-{index}-{candidate.RowId}", goal.Id == candidate.RowId))
+                        {
+                            SetAchievement(goal, candidate);
+                            ImGui.CloseCurrentPopup();
+                            changed = true;
+                        }
+                        ImGui.TableSetColumnIndex(1);
+                        ImGui.TextDisabled(category);
+                        if (++shown >= 200) break;
+                    }
+                    ImGui.EndTable();
+                }
+                ImGui.EndChild();
+            }
+            ImGui.EndPopup();
+        }
+
+        return changed;
+    }
+
+    private void DrawAchievementProgress(AchievementGoal goal)
+    {
+        if (goal.Id <= 0)
+        {
+            ImGui.TextDisabled("选择成就后自动读取目标条件和进度");
+            return;
+        }
+
+        var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
+        if (!row.HasValue)
+        {
+            ImGui.TextDisabled("无效成就 ID");
+            return;
+        }
+
+        ImGui.TextWrapped(row.Value.Description.ToString());
+        progress.TryGetValue((uint)goal.Id, out var state);
+        var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
+        ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
+    }
+
+    private bool DrawTerritoryPicker(int index, AchievementGoal goal)
+    {
+        var changed = ImGui.Checkbox("不限制地区", ref goal.IgnoreRegion);
+        if (goal.IgnoreRegion) return changed;
+
+        var label = goal.RegionId > 0
+            ? $"{goal.RegionGroup} / {goal.Region}##territory-picker"
+            : "选择地区…##territory-picker";
+        if (ImGui.Button(label)) ImGui.OpenPopup("TerritoryPicker");
+
+        if (ImGui.BeginPopup("TerritoryPicker"))
+        {
+            territorySearch.TryGetValue(index, out var query);
+            query ??= "";
+            ImGui.SetNextItemWidth(-1);
+            ImGui.InputText("搜索地区 / ID", ref query, 128);
+            territorySearch[index] = query ?? "";
+            if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(0, 240), true))
+            {
+                if (ImGui.BeginTable("##territory-result-table", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+                {
+                    ImGui.TableSetupColumn("区域", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("地区", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 60);
+                    ImGui.TableHeadersRow();
+                    foreach (var candidate in DalamudServices.DataManager.GetExcelSheet<TerritoryType>())
+                    {
+                        var group = candidate.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "";
+                        var area = candidate.PlaceName.ValueNullable?.Name.ToString() ?? "";
+                        if (string.IsNullOrWhiteSpace(area) || !MatchesSearch(query, candidate.RowId, group, area)) continue;
+                        ImGui.TableNextRow();
+                        ImGui.TableSetColumnIndex(0); ImGui.TextUnformatted(group);
+                        ImGui.TableSetColumnIndex(1);
+                        if (ImGui.Selectable($"{area}##territory-{index}-{candidate.RowId}", goal.RegionId == candidate.RowId))
+                        {
+                            goal.RegionId = (int)candidate.RowId;
+                            goal.RegionGroup = group;
+                            goal.Region = area;
+                            changed = true;
+                            ImGui.CloseCurrentPopup();
+                        }
+                        ImGui.TableSetColumnIndex(2); ImGui.TextDisabled(candidate.RowId.ToString());
+                    }
+                    ImGui.EndTable();
+                }
+                ImGui.EndChild();
+            }
+            ImGui.EndPopup();
+        }
+        return changed;
+    }
+
+    private static bool MatchesSearch(string? query, uint rowId, params string[] values)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return true;
+        var text = query.Trim();
+        if (rowId.ToString().Contains(text, StringComparison.OrdinalIgnoreCase)) return true;
+        return values.Any(value => value.Contains(text, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void SetAchievement(AchievementGoal goal, LuminaAchievement row)
+    {
+        goal.Id = (int)row.RowId;
+        goal.Name = row.Name.ToString();
+        goal.Enabled = true;
+    }
+
+    private static string GetAchievementCategory(LuminaAchievement row)
+    {
+        return row.AchievementCategory.ValueNullable?.Name.ToString() ?? "未分类";
+    }
+
     private void DrawOverlay()
     {
         if (!config.ShowOverlay) return;
@@ -147,14 +325,17 @@ public sealed unsafe class AchievementTracker : ModuleBase
         ImGui.TextUnformatted("目标成就 · " + (string.IsNullOrEmpty(currentRegion) ? "未知地区" : currentRegion));
         foreach (var goal in config.Goals)
         {
-            if (!goal.Enabled || goal.Id <= 0 || (!goal.IgnoreRegion && !string.IsNullOrWhiteSpace(goal.Region) && !string.Equals(goal.Region, currentRegion, StringComparison.OrdinalIgnoreCase))) continue;
+            var regionAllowed = goal.IgnoreRegion
+                || (goal.RegionId > 0 && goal.RegionId == currentTerritoryId)
+                || (goal.RegionId <= 0 && (string.IsNullOrWhiteSpace(goal.Region) || string.Equals(goal.Region, currentRegion, StringComparison.OrdinalIgnoreCase)));
+            if (!goal.Enabled || goal.Id <= 0 || !regionAllowed) continue;
             progress.TryGetValue((uint)goal.Id, out var state);
             var completed = state.Max > 0 && state.Current >= state.Max;
             if (!config.ShowCompleted && completed) continue;
             var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
             ImGui.Separator();
-            ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : $"无效成就 ID: {goal.Id}");
-            ImGui.TextDisabled(string.IsNullOrWhiteSpace(goal.Region) ? "不限制地区" : goal.Region);
+            ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? $"无效成就 ID: {goal.Id}" : goal.Name));
+            ImGui.TextDisabled(goal.IgnoreRegion ? "不限制地区" : $"{goal.RegionGroup} / {goal.Region}");
             var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
             ImGui.ProgressBar(ratio, new System.Numerics.Vector2(220, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
             ImGui.TextColored(completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1), completed ? "已完成" : "进行中");
@@ -207,13 +388,28 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
         if (achievementId == 0)
         {
-            DalamudServices.PluginLog.Warning($"成就追踪：未能解析右键目标成就，名称为“{openedAchievementName ?? "[空]"}”");
+            if (!string.IsNullOrWhiteSpace(openedAchievementName))
+            {
+                config.Goals.Add(new AchievementGoal
+                {
+                    Name = openedAchievementName,
+                    Enabled = true,
+                    IgnoreRegion = true,
+                });
+                SaveConfig();
+                DalamudServices.PluginLog.Warning($"成就追踪：暂时无法将“{openedAchievementName}”映射到成就表，已作为待匹配目标加入列表");
+            }
+            else
+            {
+                DalamudServices.PluginLog.Warning("成就追踪：右键菜单没有提供成就 ID 或名称");
+            }
             return;
         }
 
         config.Goals.Add(new AchievementGoal
         {
             Id = (int)achievementId,
+            Name = GetAchievementName(achievementId),
             Enabled = true,
             IgnoreRegion = true,
             Region = "",
@@ -225,19 +421,29 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private static uint ResolveAchievementIdByName(string targetName)
     {
         var sheet = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>();
+        var normalizedTarget = NormalizeAchievementText(targetName);
+        if (string.IsNullOrWhiteSpace(normalizedTarget)) return 0;
         var exactMatches = sheet
-            .Where(row => string.Equals(row.Name.ToString(), targetName, StringComparison.Ordinal))
+            .Where(row => NormalizeAchievementText(row.Name.ToString()) == normalizedTarget)
             .Select(row => row.RowId)
             .ToArray();
-        if (exactMatches.Length == 0)
-            return 0;
+        if (exactMatches.Length > 0)
+            return exactMatches[0];
 
-        if (exactMatches.Length > 1)
-        {
-            DalamudServices.PluginLog.Warning(
-                $"成就追踪：名称“{targetName}”匹配到 {exactMatches.Length} 个成就，使用第一个 ID {exactMatches[0]}");
-        }
-        return exactMatches[0];
+        var partialMatch = sheet.FirstOrDefault(row =>
+            NormalizeAchievementText(row.Name.ToString()).Contains(normalizedTarget, StringComparison.Ordinal));
+        return partialMatch.RowId;
+    }
+
+    private static string NormalizeAchievementText(string value)
+    {
+        return new string(value.Where(c => !char.IsWhiteSpace(c) && !char.IsPunctuation(c)).ToArray());
+    }
+
+    private static string GetAchievementName(uint achievementId)
+    {
+        return DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>()
+            .GetRowOrDefault(achievementId)?.Name.ToString() ?? "";
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -257,7 +463,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void UpdateTerritory()
     {
-        var row = DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(DService.Instance().ClientState.TerritoryType);
+        currentTerritoryId = DService.Instance().ClientState.TerritoryType;
+        var row = DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(currentTerritoryId);
         currentRegion = row.HasValue ? row.Value.PlaceName.ValueNullable?.Name.ToString() ?? "" : "";
     }
 
@@ -272,7 +479,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (saved == null) return;
             config.ShowOverlay = saved.ShowOverlay; config.ShowCompleted = saved.ShowCompleted; config.Opacity = saved.Opacity;
             config.Goals.Clear(); config.Goals.AddRange(saved.Goals);
-            config.Goals.RemoveAll(x => x == null || x.Id <= 0);
+            config.Goals.RemoveAll(x => x == null || (x.Id <= 0 && string.IsNullOrWhiteSpace(x.Name)));
         }
         catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取成就追踪配置失败"); }
     }
@@ -297,7 +504,11 @@ public sealed class AchievementTrackerConfig
 public sealed class AchievementGoal
 {
     public int Id;
+    public string Name = "";
     public string Region = "";
+    public string RegionGroup = "";
+    public int RegionId;
+    public string Note = "";
     public bool Enabled = true;
     public bool IgnoreRegion = true;
 }
