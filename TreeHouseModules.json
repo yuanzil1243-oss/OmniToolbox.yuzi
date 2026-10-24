@@ -5,8 +5,8 @@
       "InternalName": "AchievementTracker",
       "Name": "成就追踪",
       "Author": "Yuzi",
-      "Description": "在游戏内显示多个目标成就，支持地区限制和本地保存。",
-      "Version": "0.1.2",
+      "Description": "从原生成就右键菜单添加目标，在游戏内显示实时进度，支持地区过滤和本地保存。",
+      "Version": "0.2.0",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
       "Sha256": "1C23782D731A3DBE89DEFE0A0738817988E9576A837DB12B4E5A2B0F7C0EF407"

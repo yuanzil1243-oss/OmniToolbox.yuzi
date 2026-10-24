@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
@@ -47,6 +49,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progressHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
+        DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         QueueProgressRequests();
@@ -57,6 +60,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
+        DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpened;
         progressHook?.Dispose();
         progressHook = null;
         progress.Clear();
@@ -81,6 +85,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 ImGui.TextDisabled(row.HasValue ? row.Value.Name.ToString() : "无效成就 ID");
             }
             changed |= ImGui.InputText("地区（留空为不限制）", ref goal.Region, 64);
+            changed |= ImGui.Checkbox("不限制地区", ref goal.IgnoreRegion);
             ImGui.Separator();
             ImGui.PopID();
         }
@@ -100,7 +105,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         ImGui.TextUnformatted("目标成就 · " + (string.IsNullOrEmpty(currentRegion) ? "未知地区" : currentRegion));
         foreach (var goal in config.Goals)
         {
-            if (!goal.Enabled || goal.Id <= 0 || (!string.IsNullOrWhiteSpace(goal.Region) && !string.Equals(goal.Region, currentRegion, StringComparison.OrdinalIgnoreCase))) continue;
+            if (!goal.Enabled || goal.Id <= 0 || (!goal.IgnoreRegion && !string.IsNullOrWhiteSpace(goal.Region) && !string.Equals(goal.Region, currentRegion, StringComparison.OrdinalIgnoreCase))) continue;
             progress.TryGetValue((uint)goal.Id, out var state);
             var completed = state.Max > 0 && state.Current >= state.Max;
             if (!config.ShowCompleted && completed) continue;
@@ -120,6 +125,53 @@ public sealed unsafe class AchievementTracker : ModuleBase
         requests.Clear();
         foreach (var id in config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id).Distinct())
             requests.Enqueue(id);
+    }
+
+    private void OnMenuOpened(IMenuOpenedArgs args)
+    {
+        if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal) || args.AgentPtr == 0)
+            return;
+
+        var agent = (AgentAchievement*)args.AgentPtr;
+        var achievementId = agent->ContextMenuSelectedItemId;
+        if (achievementId == 0)
+            return;
+
+        args.AddMenuItem(new MenuItem
+        {
+            Name = "添加到成就追踪",
+            PrefixChar = 'O',
+            Priority = -1,
+            IsSubmenu = true,
+            OnClicked = clicked => clicked.OpenSubmenu(BuildTargetMenu(achievementId)),
+        });
+    }
+
+    private IReadOnlyList<IMenuItem> BuildTargetMenu(uint achievementId)
+    {
+        var items = new List<IMenuItem>(config.Goals.Count);
+        for (var index = 0; index < config.Goals.Count; index++)
+        {
+            var slot = index;
+            items.Add(new MenuItem
+            {
+                Name = $"目标 {slot + 1}",
+                IsEnabled = true,
+                OnClicked = _ => SetGoalFromMenu(slot, achievementId),
+            });
+        }
+        return items;
+    }
+
+    private void SetGoalFromMenu(int slot, uint achievementId)
+    {
+        if (slot < 0 || slot >= config.Goals.Count) return;
+        config.Goals[slot].Id = (int)achievementId;
+        config.Goals[slot].Enabled = true;
+        config.Goals[slot].IgnoreRegion = true;
+        config.Goals[slot].Region = "";
+        SaveConfig();
+        QueueProgressRequests();
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -181,6 +233,7 @@ public sealed class AchievementGoal
     public int Id;
     public string Region = "";
     public bool Enabled = true;
+    public bool IgnoreRegion = true;
 }
 
 public readonly record struct AchievementProgress(uint Current, uint Max);
