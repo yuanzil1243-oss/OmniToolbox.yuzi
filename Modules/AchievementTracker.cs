@@ -1,14 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
-using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
@@ -37,7 +34,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "在游戏内显示多个目标成就的实时进度，支持地区限制和本地保存。"
+        Description = "读取游戏原生成就进度并在游戏内显示多个目标，支持地区限制和本地保存。"
     };
     public override bool HasSettings => true;
 
@@ -49,7 +46,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progressHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
-        DService.Instance().ContextMenu.OnMenuOpened += OnMenuOpened;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         QueueProgressRequests();
@@ -60,7 +56,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
-        DService.Instance().ContextMenu.OnMenuOpened -= OnMenuOpened;
         progressHook?.Dispose();
         progressHook = null;
         progress.Clear();
@@ -125,57 +120,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         requests.Clear();
         foreach (var id in config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id).Distinct())
             requests.Enqueue(id);
-    }
-
-    private void OnMenuOpened(IMenuOpenedArgs args)
-    {
-        if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal))
-            return;
-
-        args.AddMenuItem(new MenuItem
-        {
-            Name = "添加到成就追踪",
-            PrefixChar = 'O',
-            Priority = -1,
-            IsSubmenu = true,
-            OnClicked = clicked => OpenTargetMenu(clicked),
-        });
-    }
-
-    private void OpenTargetMenu(IMenuItemClickedArgs clicked)
-    {
-        var agent = AgentAchievement.Instance();
-        if (agent == null || agent->ContextMenuSelectedItemId == 0)
-            return;
-
-        clicked.OpenSubmenu(BuildTargetMenu(agent->ContextMenuSelectedItemId));
-    }
-
-    private IReadOnlyList<IMenuItem> BuildTargetMenu(uint achievementId)
-    {
-        var items = new List<IMenuItem>(config.Goals.Count);
-        for (var index = 0; index < config.Goals.Count; index++)
-        {
-            var slot = index;
-            items.Add(new MenuItem
-            {
-                Name = $"目标 {slot + 1}",
-                IsEnabled = true,
-                OnClicked = _ => SetGoalFromMenu(slot, achievementId),
-            });
-        }
-        return items;
-    }
-
-    private void SetGoalFromMenu(int slot, uint achievementId)
-    {
-        if (slot < 0 || slot >= config.Goals.Count) return;
-        config.Goals[slot].Id = (int)achievementId;
-        config.Goals[slot].Enabled = true;
-        config.Goals[slot].IgnoreRegion = true;
-        config.Goals[slot].Region = "";
-        SaveConfig();
-        QueueProgressRequests();
     }
 
     private void OnFrameworkUpdate(IFramework framework)

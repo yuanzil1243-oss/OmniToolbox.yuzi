@@ -5,11 +5,11 @@
       "InternalName": "AchievementTracker",
       "Name": "成就追踪",
       "Author": "Yuzi",
-      "Description": "从原生成就右键菜单添加目标，在游戏内显示实时进度，支持地区过滤和本地保存。",
-      "Version": "0.2.1",
+      "Description": "读取原生成就进度并在游戏内显示多个目标，支持地区过滤和本地保存。目标 ID 在模块设置中填写。",
+      "Version": "0.2.2",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "9684BEC31BC45D4F647A746D8A776A7E791ED18B1CAFC8BC2D5010C600807122"
+      "Sha256": "39F7F81B13A6A69B3E0DBD1C52B0A981BF4BA99EE13740CD589DB60A8DEF0E13"
     },
     {
       "InternalName": "SellOnClick",
