@@ -654,6 +654,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
         public unsafe override ContextMenuItem? Create(ContextMenuOpenedArgs args)
         {
+            DalamudServices.PluginLog.Warning($"成就追踪诊断：收到右键菜单 Addon={args.AddonName ?? "<null>"}");
             // 成就列表、详情和分类页使用的原生窗口名可能不同（例如
             // AchievementDetail）。OmenTools 只在标准 AgentContext 菜单
             // 打开时调用这里，因此按 Achievement 前缀识别成就窗口。
