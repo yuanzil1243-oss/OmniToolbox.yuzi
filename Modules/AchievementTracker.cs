@@ -136,14 +136,13 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
         public unsafe override ContextMenuItem? Create(ContextMenuOpenedArgs args)
         {
-            if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal))
+            // 成就列表、详情和分类页使用的原生窗口名可能不同（例如
+            // AchievementDetail）。OmenTools 只在标准 AgentContext 菜单
+            // 打开时调用这里，因此按 Achievement 前缀识别成就窗口。
+            if (string.IsNullOrWhiteSpace(args.AddonName)
+                || !args.AddonName.StartsWith("Achievement", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var agent = AgentAchievement.Instance();
-            if (agent == null || agent->ContextMenuSelectedItemId == 0)
-                return null;
-
-            var achievementId = agent->ContextMenuSelectedItemId;
             var submenuEntries = new List<ContextMenuEntry>(module.config.Goals.Count);
             for (var index = 0; index < module.config.Goals.Count; index++)
             {
@@ -153,7 +152,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     _ => new ContextMenuItem
                     {
                         Name = $"目标 {slot + 1}",
-                        OnClicked = _ => module.SetGoalFromMenu(slot, achievementId),
+                        OnClicked = _ => module.SetGoalFromCurrentContext(slot),
                     }));
             }
 
@@ -168,6 +167,14 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 },
             };
         }
+    }
+
+    private unsafe void SetGoalFromCurrentContext(int slot)
+    {
+        var agent = AgentAchievement.Instance();
+        if (agent == null || agent->ContextMenuSelectedItemId == 0)
+            return;
+        SetGoalFromMenu(slot, agent->ContextMenuSelectedItemId);
     }
 
     private void SetGoalFromMenu(int slot, uint achievementId)
