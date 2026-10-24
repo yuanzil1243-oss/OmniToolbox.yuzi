@@ -78,7 +78,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (goal.Id > 0)
             {
                 var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
-                ImGui.TextDisabled(row.RowId == 0 ? "无效成就 ID" : row.Name.ToString());
+                ImGui.TextDisabled(row.HasValue ? row.Value.Name.ToString() : "无效成就 ID");
             }
             changed |= ImGui.InputText("地区（留空为不限制）", ref goal.Region, 64);
             ImGui.Separator();
@@ -106,7 +106,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (!config.ShowCompleted && completed) continue;
             var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
             ImGui.Separator();
-            ImGui.TextUnformatted(row.RowId == 0 ? $"无效成就 ID: {goal.Id}" : row.Name.ToString());
+            ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : $"无效成就 ID: {goal.Id}");
             ImGui.TextDisabled(string.IsNullOrWhiteSpace(goal.Region) ? "不限制地区" : goal.Region);
             var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
             ImGui.ProgressBar(ratio, new System.Numerics.Vector2(220, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
@@ -135,12 +135,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progress[id] = new(current, max);
     }
 
-    private void OnTerritoryChanged(ushort territoryType) => UpdateTerritory();
+    private void OnTerritoryChanged(uint territoryType) => UpdateTerritory();
 
     private void UpdateTerritory()
     {
         var row = DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(DService.Instance().ClientState.TerritoryType);
-        currentRegion = row.RowId == 0 ? "" : row.PlaceName.ValueNullable?.Name.ToString() ?? "";
+        currentRegion = row.HasValue ? row.Value.PlaceName.ValueNullable?.Name.ToString() ?? "" : "";
     }
 
     private static string ConfigPath => Path.Combine(DalamudServices.PluginInterface.GetPluginConfigDirectory(), "AchievementTracker.json");
