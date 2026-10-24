@@ -34,6 +34,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private uint currentTerritoryId;
     private readonly Dictionary<int, string> achievementSearch = new();
     private readonly Dictionary<int, string> territorySearch = new();
+    private AchievementGoal draftGoal = new();
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
 
@@ -76,6 +77,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override bool DrawSettings()
     {
         var changed = false;
+        var controlHeight = ImGui.GetFrameHeight();
 
         if (ImGui.BeginTable("##add-goal-panel", 1,
                 ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
@@ -85,27 +87,63 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableSetColumnIndex(0);
             ImGui.TextUnformatted("添加目标成就");
             ImGui.SameLine();
-            ImGui.TextDisabled("从原生成就界面右键添加，或手动创建目标");
+            ImGui.TextDisabled("完成设置后点击保存，目标才会加入下方列表");
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextDisabled("成就名称");
+            changed |= DrawAchievementPicker(-1, draftGoal);
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextDisabled("达成条件与进度");
+            DrawAchievementProgress(draftGoal);
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextDisabled("地区限制");
+            changed |= DrawTerritoryPicker(-1, draftGoal);
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextDisabled("备注");
+            ImGui.SetNextItemWidth(-1);
+            changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
 
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
-            if (ImGui.Button("添加空白目标", new System.Numerics.Vector2(actionWidth, 0)))
+            if (ImGui.Button("保存目标", new System.Numerics.Vector2(actionWidth, controlHeight)) && draftGoal.Id > 0)
             {
-                config.Goals.Add(new AchievementGoal());
+                config.Goals.Add(new AchievementGoal
+                {
+                    Id = draftGoal.Id,
+                    Name = draftGoal.Name,
+                    Region = draftGoal.Region,
+                    RegionGroup = draftGoal.RegionGroup,
+                    RegionId = draftGoal.RegionId,
+                    Note = draftGoal.Note,
+                    Enabled = draftGoal.Enabled,
+                    IgnoreRegion = draftGoal.IgnoreRegion,
+                    Expanded = true,
+                });
+                draftGoal = new AchievementGoal();
+                achievementSearch.Remove(-1);
+                territorySearch.Remove(-1);
                 changed = true;
             }
             ImGui.SameLine();
-            if (ImGui.Button("清空已设定目标", new System.Numerics.Vector2(actionWidth, 0)) && config.Goals.Count > 0)
+            if (ImGui.Button("清空编辑", new System.Numerics.Vector2(actionWidth, controlHeight)))
             {
-                config.Goals.Clear();
-                progress.Clear();
+                draftGoal = new AchievementGoal();
+                achievementSearch.Remove(-1);
+                territorySearch.Remove(-1);
                 changed = true;
             }
-
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            ImGui.TextDisabled("添加后可在下方展开目标，选择成就、查看原生进度、设置地区和备注。");
+            if (draftGoal.Id <= 0)
+            {
+                ImGui.TextDisabled("请先选择一个成就再保存");
+            }
             ImGui.EndTable();
         }
 
@@ -119,6 +157,20 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextUnformatted($"已设定的目标成就 ({config.Goals.Count})");
             ImGui.SameLine();
             ImGui.TextDisabled("拖动 ≡ 调整顺序");
+            if (config.Goals.Count > 0)
+            {
+                ImGui.SameLine();
+                var clearWidth = ImGui.CalcTextSize("清空全部").X + ImGui.GetStyle().FramePadding.X * 2;
+                var remainingWidth = ImGui.GetContentRegionAvail().X;
+                if (remainingWidth > clearWidth)
+                    ImGui.SameLine(ImGui.GetCursorPosX() + remainingWidth - clearWidth);
+                if (ImGui.Button("清空全部", new System.Numerics.Vector2(clearWidth, controlHeight)))
+                {
+                    config.Goals.Clear();
+                    progress.Clear();
+                    changed = true;
+                }
+            }
             ImGui.EndTable();
         }
 
@@ -137,15 +189,22 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 ImGui.SameLine();
                 changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
                 ImGui.SameLine();
-                if (ImGui.SmallButton(goal.Expanded ? "▾" : "▸"))
+                var deleteWidth = ImGui.CalcTextSize("删除").X + ImGui.GetStyle().FramePadding.X * 2;
+                var titleWidth = MathF.Max(80,
+                    ImGui.GetContentRegionAvail().X
+                    - ImGui.GetStyle().ItemSpacing.X
+                    - deleteWidth);
+                if (ImGui.Selectable(
+                        $"目标 {i + 1} · {GetGoalSummary(goal)}##goal-toggle",
+                        goal.Expanded,
+                        ImGuiSelectableFlags.None,
+                        new System.Numerics.Vector2(titleWidth, controlHeight)))
                 {
                     goal.Expanded = !goal.Expanded;
                     changed = true;
                 }
                 ImGui.SameLine();
-                ImGui.TextUnformatted($"目标 {i + 1} · {GetGoalSummary(goal)}");
-                ImGui.SameLine();
-                var remove = ImGui.SmallButton("删除");
+                var remove = ImGui.Button("删除", new System.Numerics.Vector2(deleteWidth, controlHeight));
                 if (remove)
                 {
                     config.Goals.RemoveAt(i);
@@ -390,8 +449,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private bool DrawGoalDragHandle(int index)
     {
-        ImGui.SmallButton("≡");
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip("拖动以调整顺序");
+        var controlHeight = ImGui.GetFrameHeight();
+        ImGui.Button("≡", new System.Numerics.Vector2(controlHeight, controlHeight));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip("仅可将目标向上拖动");
 
         if (ImGui.BeginDragDropSource())
         {
@@ -408,12 +468,11 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (!payload.IsNull && payload.IsDelivery() && payload.DataSize >= sizeof(int))
             {
                 var sourceIndex = System.Runtime.InteropServices.Marshal.ReadInt32((nint)payload.Data);
-                if (sourceIndex >= 0 && sourceIndex < config.Goals.Count && sourceIndex != index)
+                if (sourceIndex > index && sourceIndex < config.Goals.Count)
                 {
                     var moved = config.Goals[sourceIndex];
                     config.Goals.RemoveAt(sourceIndex);
-                    var destinationIndex = sourceIndex < index ? index - 1 : index;
-                    config.Goals.Insert(destinationIndex, moved);
+                    config.Goals.Insert(index, moved);
                     achievementSearch.Clear();
                     territorySearch.Clear();
                     changed = true;
@@ -487,7 +546,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private void QueueProgressRequests()
     {
         requests.Clear();
-        foreach (var id in config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id).Distinct())
+        var ids = config.Goals.Where(x => x.Enabled && x.Id > 0).Select(x => (uint)x.Id);
+        if (draftGoal.Enabled && draftGoal.Id > 0)
+            ids = ids.Append((uint)draftGoal.Id);
+        foreach (var id in ids.Distinct())
             requests.Enqueue(id);
     }
 
