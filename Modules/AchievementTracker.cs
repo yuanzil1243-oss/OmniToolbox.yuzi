@@ -124,12 +124,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
-            ImGui.TextDisabled("地区限制");
             changed |= DrawTerritoryPicker(-1, draftGoal);
 
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             ImGui.TextDisabled("备注");
+            ImGui.SameLine();
             ImGui.SetNextItemWidth(-1);
             changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
 
@@ -177,34 +177,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
 
         ImGui.Spacing();
-        if (ImGui.BeginTable("##configured-goals-panel", 1,
-                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
-                | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
-        {
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.TableHeaderBg));
-            ImGui.TextUnformatted($"已设定的目标成就 ({config.Goals.Count})");
-            ImGui.SameLine();
-            ImGui.TextDisabled("拖动 ≡ 调整顺序");
-            if (config.Goals.Count > 0)
-            {
-                ImGui.SameLine();
-                var clearWidth = ImGui.CalcTextSize("清空全部").X + ImGui.GetStyle().FramePadding.X * 2;
-                var remainingWidth = ImGui.GetContentRegionAvail().X;
-                if (remainingWidth > clearWidth)
-                    ImGui.SameLine(ImGui.GetCursorPosX() + remainingWidth - clearWidth);
-                if (ImGui.Button("清空全部", new System.Numerics.Vector2(clearWidth, controlHeight)))
-                {
-                    config.Goals.Clear();
-                    progress.Clear();
-                    changed = true;
-                }
-            }
-            ImGui.EndTable();
-        }
-
-        ImGui.Spacing();
         for (var i = 0; i < config.Goals.Count; i++)
         {
             var goal = config.Goals[i];
@@ -213,11 +185,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
                     | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
             {
-                ImGui.TableNextRow();
+                var headerHeight = controlHeight + ImGui.GetStyle().FramePadding.Y * 2;
+                ImGui.TableNextRow(ImGuiTableRowFlags.None, headerHeight);
                 ImGui.TableSetColumnIndex(0);
                 ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.TableHeaderBg));
+                var headerTop = ImGui.GetCursorPosY();
+                ImGui.SetCursorPosY(headerTop + (headerHeight - controlHeight) * 0.5f);
                 changed |= DrawGoalDragHandle(i);
                 ImGui.SameLine();
+                ImGui.SetCursorPosY(headerTop + (headerHeight - controlHeight) * 0.5f);
                 changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
                 ImGui.SameLine();
                 var deleteWidth = ImGui.CalcTextSize("删除").X + ImGui.GetStyle().FramePadding.X * 2;
@@ -225,6 +201,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     ImGui.GetContentRegionAvail().X
                     - ImGui.GetStyle().ItemSpacing.X
                     - deleteWidth);
+                ImGui.SetCursorPosY(headerTop + (headerHeight - controlHeight) * 0.5f);
                 if (ImGui.Selectable(
                         $"目标 {i + 1} · {GetGoalSummary(goal)}##goal-toggle",
                         goal.Expanded,
@@ -235,6 +212,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     changed = true;
                 }
                 ImGui.SameLine();
+                ImGui.SetCursorPosY(headerTop + (headerHeight - controlHeight) * 0.5f);
                 var remove = ImGui.Button("删除", new System.Numerics.Vector2(deleteWidth, controlHeight));
                 if (remove)
                 {
@@ -260,13 +238,13 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     ImGui.Unindent(12);
 
                     ImGui.Spacing();
-                    ImGui.TextDisabled("地区限制");
                     ImGui.Indent(12);
                     changed |= DrawTerritoryPicker(i, goal);
                     ImGui.Unindent(12);
 
                     ImGui.Spacing();
                     ImGui.TextDisabled("备注");
+                    ImGui.SameLine();
                     ImGui.SetNextItemWidth(-1);
                     changed |= ImGui.InputText("##note", ref goal.Note, 128);
 
@@ -290,7 +268,18 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableSetColumnIndex(0);
             changed |= ImGui.Checkbox("显示游戏内窗口", ref config.ShowOverlay);
             ImGui.TableSetColumnIndex(1);
-            ImGui.TextDisabled("完成显示已在每个目标中单独设置");
+            if (config.Goals.Count > 0)
+            {
+                var clearWidth = ImGui.CalcTextSize("清空全部").X + ImGui.GetStyle().FramePadding.X * 2;
+                var right = ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - clearWidth;
+                ImGui.SetCursorPosX(MathF.Max(ImGui.GetCursorPosX(), right));
+                if (ImGui.Button("清空全部", new System.Numerics.Vector2(clearWidth, controlHeight)))
+                {
+                    config.Goals.Clear();
+                    progress.Clear();
+                    changed = true;
+                }
+            }
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             if (ImGui.Button("重新读取进度", new System.Numerics.Vector2(0, controlHeight)))
@@ -323,7 +312,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
         if (row.HasValue)
         {
             ImGui.TextDisabled($"ID: {row.Value.RowId}");
-            ImGui.TextDisabled(GetAchievementCategory(row.Value));
+            ImGui.SameLine();
+            ImGui.TextDisabled($"分类: {GetAchievementCategory(row.Value)}");
         }
         else if (goal.Id > 0)
         {
@@ -409,12 +399,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
         var changed = ImGui.Checkbox("不限制地区", ref goal.IgnoreRegion);
         if (goal.IgnoreRegion) return changed;
 
+        ImGui.SameLine();
+
         var popupId = $"TerritoryPicker-{index}";
         territorySearch.TryGetValue(index, out var query);
         query ??= "";
 
         var label = GetRegionSelectionSummary(goal, index);
-        if (ImGui.Button(label, new System.Numerics.Vector2(-1, 0))) ImGui.OpenPopup(popupId);
+        ImGui.SetNextItemWidth(-1);
+        if (ImGui.Button(label, new System.Numerics.Vector2(-1, ImGui.GetFrameHeight()))) ImGui.OpenPopup(popupId);
 
         var popupOpen = ImGui.IsPopupOpen(popupId);
         var matches = popupOpen
@@ -636,9 +629,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
             var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
             ImGui.Separator();
             ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? $"无效成就 ID: {goal.Id}" : goal.Name));
-            if (!goal.IgnoreRegion && goal.Regions.Count > 0)
-                ImGui.TextDisabled(string.Join("、", goal.Regions.Select(region =>
-                    string.IsNullOrWhiteSpace(region.Group) ? region.Name : $"{region.Group} / {region.Name}")));
             if (!string.IsNullOrWhiteSpace(goal.Note))
                 ImGui.TextDisabled(goal.Note);
             var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
