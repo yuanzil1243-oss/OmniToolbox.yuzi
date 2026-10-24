@@ -662,6 +662,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 return null;
 
             var openedAchievementId = module.ReadCurrentContextAchievementId();
+            DalamudServices.PluginLog.Warning(
+                $"成就追踪诊断：创建右键菜单 Addon={args.AddonName}, Agent={(AgentAchievement.Instance() != null ? "存在" : "为空")}, ContextMenuSelectedItemId={openedAchievementId}");
             return new ContextMenuItem
             {
                 Name = "添加到成就追踪",
@@ -680,7 +682,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void AddGoalFromContext(uint openedAchievementId)
     {
-        var achievementId = openedAchievementId != 0 ? openedAchievementId : ReadCurrentContextAchievementId();
+        var currentContextId = ReadCurrentContextAchievementId();
+        var achievementId = openedAchievementId != 0 ? openedAchievementId : currentContextId;
+        DalamudServices.PluginLog.Warning(
+            $"成就追踪诊断：点击添加 openedId={openedAchievementId}, currentId={currentContextId}, resolvedId={achievementId}");
 
         if (achievementId == 0)
         {
