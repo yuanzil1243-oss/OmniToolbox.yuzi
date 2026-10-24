@@ -6,10 +6,10 @@
       "Name": "成就追踪",
       "Author": "Yuzi",
       "Description": "通过 Omni 本体的原生右键菜单服务读取成就 ID 或名称，并显示不限数量目标实时进度，支持地区筛选和本地保存。",
-      "Version": "0.4.7",
+      "Version": "0.4.8",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "47E0755601E7EE65DCBC982A147EEEDFA83DEBBB9B53E7F7831C0C1A5D4064DB"
+      "Sha256": "BFB8AFFDA371E77EE2CB9925B43316BF159663EC3869DEAAC7717DDEE4E8225A"
     },
     {
       "InternalName": "SellOnClick",

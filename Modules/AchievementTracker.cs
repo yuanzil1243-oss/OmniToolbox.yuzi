@@ -76,21 +76,53 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override bool DrawSettings()
     {
         var changed = false;
-        ImGui.TextUnformatted("成就目标列表");
-        ImGui.TextDisabled("每个条目独立保存。名称、分类、目标条件和进度由游戏原生成就数据读取。");
-        if (ImGui.Button("添加空白目标"))
+
+        if (ImGui.BeginTable("##add-goal-panel", 1,
+                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
+                | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
         {
-            config.Goals.Add(new AchievementGoal());
-            changed = true;
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextUnformatted("添加目标成就");
+            ImGui.SameLine();
+            ImGui.TextDisabled("从原生成就界面右键添加，或手动创建目标");
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
+            if (ImGui.Button("添加空白目标", new System.Numerics.Vector2(actionWidth, 0)))
+            {
+                config.Goals.Add(new AchievementGoal());
+                changed = true;
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("清空已设定目标", new System.Numerics.Vector2(actionWidth, 0)) && config.Goals.Count > 0)
+            {
+                config.Goals.Clear();
+                progress.Clear();
+                changed = true;
+            }
+
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextDisabled("添加后可在下方展开目标，选择成就、查看原生进度、设置地区和备注。");
+            ImGui.EndTable();
         }
-        ImGui.SameLine();
-        if (ImGui.Button("清空列表") && config.Goals.Count > 0)
+
+        ImGui.Spacing();
+        if (ImGui.BeginTable("##configured-goals-panel", 1,
+                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
+                | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
         {
-            config.Goals.Clear();
-            progress.Clear();
-            changed = true;
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            ImGui.TextUnformatted($"已设定的目标成就 ({config.Goals.Count})");
+            ImGui.SameLine();
+            ImGui.TextDisabled("拖动 ≡ 调整顺序");
+            ImGui.EndTable();
         }
-        ImGui.Separator();
+
+        ImGui.Spacing();
         for (var i = 0; i < config.Goals.Count; i++)
         {
             var goal = config.Goals[i];
