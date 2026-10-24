@@ -129,12 +129,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void OnMenuOpened(IMenuOpenedArgs args)
     {
-        if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal) || args.AgentPtr == 0)
-            return;
-
-        var agent = (AgentAchievement*)args.AgentPtr;
-        var achievementId = agent->ContextMenuSelectedItemId;
-        if (achievementId == 0)
+        if (!string.Equals(args.AddonName, "Achievement", StringComparison.Ordinal))
             return;
 
         args.AddMenuItem(new MenuItem
@@ -143,8 +138,17 @@ public sealed unsafe class AchievementTracker : ModuleBase
             PrefixChar = 'O',
             Priority = -1,
             IsSubmenu = true,
-            OnClicked = clicked => clicked.OpenSubmenu(BuildTargetMenu(achievementId)),
+            OnClicked = clicked => OpenTargetMenu(clicked),
         });
+    }
+
+    private void OpenTargetMenu(IMenuItemClickedArgs clicked)
+    {
+        var agent = AgentAchievement.Instance();
+        if (agent == null || agent->ContextMenuSelectedItemId == 0)
+            return;
+
+        clicked.OpenSubmenu(BuildTargetMenu(agent->ContextMenuSelectedItemId));
     }
 
     private IReadOnlyList<IMenuItem> BuildTargetMenu(uint achievementId)

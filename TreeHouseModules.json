@@ -6,7 +6,7 @@
       "Name": "成就追踪",
       "Author": "Yuzi",
       "Description": "从原生成就右键菜单添加目标，在游戏内显示实时进度，支持地区过滤和本地保存。",
-      "Version": "0.2.0",
+      "Version": "0.2.1",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
       "Sha256": "F9C5E1EA46B4844708F28447A883769F223075DC4928546EEF5C9B1E4D20EA67"
