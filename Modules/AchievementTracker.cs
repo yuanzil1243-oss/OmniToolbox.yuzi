@@ -95,47 +95,84 @@ public sealed unsafe class AchievementTracker : ModuleBase
         {
             var goal = config.Goals[i];
             ImGui.PushID(i);
-            changed |= DrawGoalDragHandle(i);
-            ImGui.SameLine();
-            changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
-            ImGui.SameLine();
-            ImGui.TextUnformatted($"目标 {i + 1}");
-            ImGui.SameLine();
-            var remove = ImGui.SmallButton("删除");
-            if (remove)
+            if (ImGui.BeginTable("##goal-card", 1,
+                    ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
+                    | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
             {
-                config.Goals.RemoveAt(i);
-                changed = true;
-                ImGui.PopID();
-                break;
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                changed |= DrawGoalDragHandle(i);
+                ImGui.SameLine();
+                changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
+                ImGui.SameLine();
+                if (ImGui.SmallButton(goal.Expanded ? "▾" : "▸"))
+                {
+                    goal.Expanded = !goal.Expanded;
+                    changed = true;
+                }
+                ImGui.SameLine();
+                ImGui.TextUnformatted($"目标 {i + 1} · {GetGoalSummary(goal)}");
+                ImGui.SameLine();
+                var remove = ImGui.SmallButton("删除");
+                if (remove)
+                {
+                    config.Goals.RemoveAt(i);
+                    changed = true;
+                    ImGui.EndTable();
+                    ImGui.PopID();
+                    break;
+                }
+
+                if (goal.Expanded)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.Indent(12);
+                    ImGui.TextDisabled("成就名称");
+                    changed |= DrawAchievementPicker(i, goal);
+
+                    ImGui.Spacing();
+                    ImGui.TextDisabled("达成条件与进度");
+                    ImGui.Indent(12);
+                    DrawAchievementProgress(goal);
+                    ImGui.Unindent(12);
+
+                    ImGui.Spacing();
+                    ImGui.TextDisabled("地区限制");
+                    ImGui.Indent(12);
+                    changed |= DrawTerritoryPicker(i, goal);
+                    ImGui.Unindent(12);
+
+                    ImGui.Spacing();
+                    ImGui.TextDisabled("备注");
+                    ImGui.SetNextItemWidth(-1);
+                    changed |= ImGui.InputText("##note", ref goal.Note, 128);
+                    ImGui.Unindent(12);
+                }
+                ImGui.EndTable();
             }
-
-            ImGui.Indent(12);
-            ImGui.TextUnformatted("成就名称");
-            changed |= DrawAchievementPicker(i, goal);
-
-            ImGui.TextUnformatted("达成条件");
-            ImGui.Indent(12);
-            DrawAchievementProgress(goal);
-            ImGui.Unindent(12);
-
-            ImGui.TextUnformatted("地区限制");
-            ImGui.Indent(12);
-            changed |= DrawTerritoryPicker(i, goal);
-            ImGui.TextUnformatted("备注");
-            ImGui.SameLine();
-            changed |= ImGui.InputText("##note", ref goal.Note, 128);
-            ImGui.Unindent(12);
-            ImGui.Unindent(12);
-            ImGui.Separator();
+            ImGui.Spacing();
             ImGui.PopID();
         }
         if (config.Goals.Count == 0)
             ImGui.TextDisabled("暂无目标。可以在游戏成就界面右键添加。");
 
-        changed |= ImGui.Checkbox("显示游戏内窗口", ref config.ShowOverlay);
-        changed |= ImGui.Checkbox("已完成目标仍然显示", ref config.ShowCompleted);
-        if (ImGui.Button("重新读取进度")) { QueueProgressRequests(); changed = true; }
+        if (ImGui.BeginTable("##display-options", 2,
+                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerV
+                | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
+        {
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            changed |= ImGui.Checkbox("显示游戏内窗口", ref config.ShowOverlay);
+            ImGui.TableSetColumnIndex(1);
+            changed |= ImGui.Checkbox("已完成目标仍然显示", ref config.ShowCompleted);
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
+            if (ImGui.Button("重新读取进度")) { QueueProgressRequests(); changed = true; }
+            ImGui.TableSetColumnIndex(1);
+            ImGui.TextDisabled("目标进度由游戏原生数据读取");
+            ImGui.EndTable();
+        }
         if (changed) { SaveConfig(); QueueProgressRequests(); }
         return changed;
     }
@@ -368,6 +405,13 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return row.AchievementCategory.ValueNullable?.Name.ToString() ?? "未分类";
     }
 
+    private static string GetGoalSummary(AchievementGoal goal)
+    {
+        var name = string.IsNullOrWhiteSpace(goal.Name) ? "未选择成就" : goal.Name;
+        if (goal.IgnoreRegion) return name;
+        return string.IsNullOrWhiteSpace(goal.Region) ? $"{name} · 指定地区" : $"{name} · {goal.Region}";
+    }
+
     private readonly record struct TerritorySearchResult(TerritoryType Row, string Group, string Area);
 
     private void DrawOverlay()
@@ -583,6 +627,7 @@ public sealed class AchievementGoal
     public string Note = "";
     public bool Enabled = true;
     public bool IgnoreRegion = true;
+    public bool Expanded = true;
 }
 
 public readonly record struct AchievementProgress(uint Current, uint Max);
