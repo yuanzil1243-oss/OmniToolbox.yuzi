@@ -6,7 +6,7 @@
       "Name": "成就追踪",
       "Author": "Yuzi",
       "Description": "在游戏内显示多个目标成就，支持地区限制和本地保存。",
-      "Version": "0.1.0",
+      "Version": "0.1.1",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
       "Sha256": "F6A981D3C149CF521401CD7BFFE6A7D467AB3C394A4BB9FDD845ACC06727249E"

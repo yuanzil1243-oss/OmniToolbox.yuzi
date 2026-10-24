@@ -11,6 +11,9 @@ using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
 using OmenTools.OmenService;
+using OmenTools.Extensions;
+using FfxivAchievement = FFXIVClientStructs.FFXIV.Client.Game.UI.Achievement;
+using LuminaAchievement = Lumina.Excel.Sheets.Achievement;
 using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
@@ -27,7 +30,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private Hook<ReceiveAchievementProgressDelegate>? progressHook;
     private string currentRegion = "";
 
-    private delegate void ReceiveAchievementProgressDelegate(Achievement* achievement, uint id, uint current, uint max);
+    private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
 
     public override ModuleInfo Info { get; } = new()
     {
@@ -40,10 +43,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         LoadConfig();
         progressHook = DService.Instance().Hook.HookFromMemberFunction<ReceiveAchievementProgressDelegate>(
-            typeof(Achievement.MemberFunctionPointers), "ReceiveAchievementProgress", ReceiveAchievementProgress);
+            typeof(FfxivAchievement.MemberFunctionPointers), "ReceiveAchievementProgress", ReceiveAchievementProgress);
         progressHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
-        DalamudServices.ClientState.TerritoryChanged += OnTerritoryChanged;
+        DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         QueueProgressRequests();
@@ -53,7 +56,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
-        DalamudServices.ClientState.TerritoryChanged -= OnTerritoryChanged;
+        DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
         progressHook?.Dispose();
         progressHook = null;
         progress.Clear();
@@ -74,7 +77,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             changed |= ImGui.InputInt("成就 ID", ref goal.Id);
             if (goal.Id > 0)
             {
-                var row = DalamudServices.DataManager.GetExcelSheet<Achievement>().GetRowOrDefault((uint)goal.Id);
+                var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
                 ImGui.TextDisabled(row.RowId == 0 ? "无效成就 ID" : row.Name.ToString());
             }
             changed |= ImGui.InputText("地区（留空为不限制）", ref goal.Region, 64);
@@ -101,7 +104,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             progress.TryGetValue((uint)goal.Id, out var state);
             var completed = state.Max > 0 && state.Current >= state.Max;
             if (!config.ShowCompleted && completed) continue;
-            var row = DalamudServices.DataManager.GetExcelSheet<Achievement>().GetRowOrDefault((uint)goal.Id);
+            var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
             ImGui.Separator();
             ImGui.TextUnformatted(row.RowId == 0 ? $"无效成就 ID: {goal.Id}" : row.Name.ToString());
             ImGui.TextDisabled(string.IsNullOrWhiteSpace(goal.Region) ? "不限制地区" : goal.Region);
@@ -121,12 +124,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        if (!DalamudServices.ClientState.IsLoggedIn || requests.Count == 0) return;
+        if (!DService.Instance().ClientState.IsLoggedIn || requests.Count == 0) return;
         var id = requests.Dequeue();
         ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.RequestAchievement, id);
     }
 
-    private void ReceiveAchievementProgress(Achievement* achievement, uint id, uint current, uint max)
+    private void ReceiveAchievementProgress(FfxivAchievement* achievement, uint id, uint current, uint max)
     {
         progressHook!.Original(achievement, id, current, max);
         progress[id] = new(current, max);
@@ -136,7 +139,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void UpdateTerritory()
     {
-        var row = DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(DalamudServices.ClientState.TerritoryType);
+        var row = DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(DService.Instance().ClientState.TerritoryType);
         currentRegion = row.RowId == 0 ? "" : row.PlaceName.ValueNullable?.Name.ToString() ?? "";
     }
 
