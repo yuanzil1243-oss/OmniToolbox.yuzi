@@ -5,11 +5,11 @@
       "InternalName": "AchievementTracker",
       "Name": "成就追踪",
       "Author": "Yuzi",
-      "Description": "通过 Omni 本体的原生右键菜单服务读取成就 ID，并显示多个目标的实时进度，支持地区过滤和本地保存。",
-      "Version": "0.3.2",
+      "Description": "通过 Omni 本体的原生右键菜单服务读取成就 ID，并显示不限数量的目标实时进度，支持地区过滤和本地保存。",
+      "Version": "0.4.0",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "44835E0458F28C7FA740F2446A8E30C9F6FDE284C729632DF985ACC54BFC91C0"
+      "Sha256": "5DE78ECD384054775DE24BE9C004FDD65C0CCB3853A7739A43C9608C61657D8D"
     },
     {
       "InternalName": "SellOnClick",

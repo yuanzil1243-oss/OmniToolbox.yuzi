@@ -37,7 +37,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度并在游戏内显示多个目标，支持地区限制和本地保存。"
+        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持地区限制和本地保存。"
     };
     public override bool HasSettings => true;
 
@@ -73,14 +73,50 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override bool DrawSettings()
     {
         var changed = false;
-        ImGui.TextUnformatted("输入成就表 ID；名称与进度由游戏成就系统读取。");
+        ImGui.TextUnformatted("成就目标列表");
+        ImGui.TextDisabled("右键成就条目可直接加入列表；名称、进度和最大值由游戏原生系统读取。");
+        if (ImGui.Button("添加空白目标"))
+        {
+            config.Goals.Add(new AchievementGoal());
+            changed = true;
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("清空列表") && config.Goals.Count > 0)
+        {
+            config.Goals.Clear();
+            progress.Clear();
+            changed = true;
+        }
         ImGui.Separator();
         for (var i = 0; i < config.Goals.Count; i++)
         {
             var goal = config.Goals[i];
             ImGui.PushID(i);
-            changed |= ImGui.Checkbox("启用", ref goal.Enabled);
+            changed |= ImGui.Checkbox("##enabled", ref goal.Enabled);
             ImGui.SameLine();
+            ImGui.TextUnformatted($"目标 {i + 1}");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("上移") && i > 0)
+            {
+                (config.Goals[i - 1], config.Goals[i]) = (config.Goals[i], config.Goals[i - 1]);
+                changed = true;
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("下移") && i + 1 < config.Goals.Count)
+            {
+                (config.Goals[i + 1], config.Goals[i]) = (config.Goals[i], config.Goals[i + 1]);
+                changed = true;
+            }
+            ImGui.SameLine();
+            var remove = ImGui.SmallButton("删除");
+            if (remove)
+            {
+                config.Goals.RemoveAt(i);
+                changed = true;
+                ImGui.PopID();
+                break;
+            }
+
             changed |= ImGui.InputInt("成就 ID", ref goal.Id);
             if (goal.Id > 0)
             {
@@ -92,6 +128,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.Separator();
             ImGui.PopID();
         }
+        if (config.Goals.Count == 0)
+            ImGui.TextDisabled("暂无目标。可以在游戏成就界面右键添加。");
+
         changed |= ImGui.Checkbox("显示游戏内窗口", ref config.ShowOverlay);
         changed |= ImGui.Checkbox("已完成目标仍然显示", ref config.ShowCompleted);
         if (ImGui.Button("重新读取进度")) { QueueProgressRequests(); changed = true; }
@@ -143,47 +182,38 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 || !args.AddonName.StartsWith("Achievement", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var submenuEntries = new List<ContextMenuEntry>(module.config.Goals.Count);
-            for (var index = 0; index < module.config.Goals.Count; index++)
-            {
-                var slot = index;
-                submenuEntries.Add(new ContextMenuEntryInfo(
-                    $"AchievementTracker.Target{slot + 1}",
-                    _ => new ContextMenuItem
-                    {
-                        Name = $"目标 {slot + 1}",
-                        OnClicked = _ => module.SetGoalFromCurrentContext(slot),
-                    }));
-            }
-
+            var openedAchievementId = module.ReadCurrentContextAchievementId();
             return new ContextMenuItem
             {
                 Name = "添加到成就追踪",
                 Priority = -1,
-                Submenu = new ContextMenuSubmenu
-                {
-                    Title = "添加到成就追踪",
-                    Entries = submenuEntries,
-                },
+                OnClicked = _ => module.AddGoalFromContext(openedAchievementId),
             };
         }
     }
 
-    private unsafe void SetGoalFromCurrentContext(int slot)
+    private unsafe uint ReadCurrentContextAchievementId()
     {
         var agent = AgentAchievement.Instance();
-        if (agent == null || agent->ContextMenuSelectedItemId == 0)
-            return;
-        SetGoalFromMenu(slot, agent->ContextMenuSelectedItemId);
+        return agent == null ? 0 : agent->ContextMenuSelectedItemId;
     }
 
-    private void SetGoalFromMenu(int slot, uint achievementId)
+    private void AddGoalFromContext(uint openedAchievementId)
     {
-        if (slot < 0 || slot >= config.Goals.Count || achievementId == 0) return;
-        config.Goals[slot].Id = (int)achievementId;
-        config.Goals[slot].Enabled = true;
-        config.Goals[slot].IgnoreRegion = true;
-        config.Goals[slot].Region = "";
+        var achievementId = openedAchievementId != 0 ? openedAchievementId : ReadCurrentContextAchievementId();
+        if (achievementId == 0)
+        {
+            DalamudServices.PluginLog.Warning("成就追踪：右键菜单点击时未读取到原生成就 ID");
+            return;
+        }
+
+        config.Goals.Add(new AchievementGoal
+        {
+            Id = (int)achievementId,
+            Enabled = true,
+            IgnoreRegion = true,
+            Region = "",
+        });
         SaveConfig();
         QueueProgressRequests();
     }
@@ -220,7 +250,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (saved == null) return;
             config.ShowOverlay = saved.ShowOverlay; config.ShowCompleted = saved.ShowCompleted; config.Opacity = saved.Opacity;
             config.Goals.Clear(); config.Goals.AddRange(saved.Goals);
-            while (config.Goals.Count < 3) config.Goals.Add(new AchievementGoal());
+            config.Goals.RemoveAll(x => x == null || x.Id <= 0);
         }
         catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取成就追踪配置失败"); }
     }
@@ -235,7 +265,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 [Serializable]
 public sealed class AchievementTrackerConfig
 {
-    public List<AchievementGoal> Goals = new() { new(), new(), new() };
+    public List<AchievementGoal> Goals = new();
     public bool ShowOverlay = true;
     public bool ShowCompleted = true;
     public float Opacity = 0.92f;
