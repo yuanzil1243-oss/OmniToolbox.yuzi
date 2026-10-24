@@ -176,7 +176,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextDisabled("待匹配名称，可在上方搜索框重新选择");
         }
 
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 420), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 420), ImGuiCond.Always);
         ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 260), new System.Numerics.Vector2(700, 560));
         if (ImGui.BeginPopup(popupId))
         {
@@ -186,7 +186,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.InputText("搜索名称 / ID", ref query, 128);
             achievementSearch[index] = query;
 
-            if (ImGui.BeginChild("##achievement-results", new System.Numerics.Vector2(520, 280), true))
+            if (ImGui.BeginChild("##achievement-results", new System.Numerics.Vector2(-1, 280), true))
             {
                 if (ImGui.BeginTable("##achievement-result-table", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
@@ -253,7 +253,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         var popupId = $"TerritoryPicker-{index}";
         if (ImGui.Button(label, new System.Numerics.Vector2(-1, 0))) ImGui.OpenPopup(popupId);
 
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 400), ImGuiCond.Appearing);
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(560, 400), ImGuiCond.Always);
         ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 240), new System.Numerics.Vector2(700, 520));
         if (ImGui.BeginPopup(popupId))
         {
@@ -262,7 +262,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.SetNextItemWidth(-1);
             ImGui.InputText("搜索地区 / ID", ref query, 128);
             territorySearch[index] = query ?? "";
-            if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(520, 240), true))
+            if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(-1, 240), true))
             {
                 if (ImGui.BeginTable("##territory-result-table", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
