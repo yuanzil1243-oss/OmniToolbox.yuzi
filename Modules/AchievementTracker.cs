@@ -27,7 +27,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly Dictionary<uint, AchievementProgress> progress = new();
     private readonly Queue<uint> requests = new();
     private Dalamud.Hooking.Hook<ReceiveAchievementProgressDelegate>? progressHook;
-    private Dalamud.Hooking.Hook<AchievementListModule.Delegates.AddToWatchlist>? addToWatchlistHook;
     private string currentRegion = "";
     private uint currentTerritoryId;
     private readonly Dictionary<int, string> achievementSearch = new();
@@ -36,8 +35,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private ulong activeContentId;
     private bool nativeWatchlistImported;
     private long nativeWatchlistImportAfter;
+    private long nextNativeWatchlistPoll;
+    private string nativeWatchlistSnapshot = "";
     private bool legacyMigrationPending;
-    private readonly HashSet<ushort> pendingNativeAdds = new();
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
     public override ModuleInfo Info { get; } = new()
@@ -46,7 +46,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，自动同步原生目标列表并按角色保存。",
         Commands = new[]
         {
-            new ModuleCommand("显示或隐藏成就追踪窗口", "achievement"),
+            new ModuleCommand("显示或隐藏成就追踪窗口", "成就追踪悬浮窗"),
         },
     };
     public override bool HasSettings => true;
@@ -56,12 +56,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     public override bool TryHandleCommand(string command, string arguments)
     {
-        var value = string.IsNullOrWhiteSpace(command) ? arguments : command;
-        value = value.Trim().TrimStart('/');
-        if (value.StartsWith("omni ", StringComparison.OrdinalIgnoreCase))
-            value = value[5..].TrimStart();
-        var name = value.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        if (!string.Equals(name, "achievement", StringComparison.OrdinalIgnoreCase))
+        static string Normalize(string value)
+        {
+            value = value.Trim().TrimStart('/');
+            if (value.StartsWith("omni ", StringComparison.OrdinalIgnoreCase))
+                value = value[5..].TrimStart();
+            return value;
+        }
+
+        if (!new[] { command, arguments }.Any(value =>
+                string.Equals(Normalize(value), "成就追踪悬浮窗", StringComparison.Ordinal)))
             return false;
 
         EnsureCharacterProfile();
@@ -76,9 +80,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progressHook = DService.Instance().Hook.HookFromMemberFunction<ReceiveAchievementProgressDelegate>(
             typeof(FfxivAchievement.MemberFunctionPointers), "ReceiveAchievementProgress", ReceiveAchievementProgress);
         progressHook.Enable();
-        addToWatchlistHook = DService.Instance().Hook.HookFromMemberFunction<AchievementListModule.Delegates.AddToWatchlist>(
-            typeof(AchievementListModule.MemberFunctionPointers), "AddToWatchlist", AddToWatchlist);
-        addToWatchlistHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
@@ -94,13 +95,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         SaveConfig();
         progressHook?.Dispose();
         progressHook = null;
-        addToWatchlistHook?.Dispose();
-        addToWatchlistHook = null;
         progress.Clear();
         requests.Clear();
         activeContentId = 0;
         nativeWatchlistImported = false;
-        pendingNativeAdds.Clear();
+        nextNativeWatchlistPoll = 0;
+        nativeWatchlistSnapshot = "";
     }
 
     public override bool DrawSettings()
@@ -297,11 +297,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableSetColumnIndex(0);
             if (ImGui.Button("重新读取进度", new System.Numerics.Vector2(0, controlHeight)))
             {
+                RefreshNativeWatchlistAndProgress();
                 QueueProgressRequests();
                 changed = true;
             }
             ImGui.SameLine();
-            ImGui.TextDisabled("目标进度由游戏原生数据读取");
+            ImGui.TextDisabled("同时刷新游戏原生目标列表");
             ImGui.EndTable();
         }
         if (changed) { SaveConfig(); QueueProgressRequests(); }
@@ -665,18 +666,15 @@ public sealed unsafe class AchievementTracker : ModuleBase
             requests.Enqueue(id);
     }
 
-    private bool AddToWatchlist(AchievementListModule* list, ushort achievementId)
+    private void RefreshNativeWatchlistAndProgress()
     {
-        var result = addToWatchlistHook!.Original(list, achievementId);
-        var isOnWatchlist = result;
-        if (!isOnWatchlist && list != null)
-        {
-            var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
-            isOnWatchlist = list->WatchList[..count].Contains(achievementId);
-        }
-        if (isOnWatchlist && activeContentId != 0 && list != null && list->CharacterContentId == activeContentId)
-            pendingNativeAdds.Add(achievementId);
-        return result;
+        progress.Clear();
+        nativeWatchlistImported = false;
+        nativeWatchlistImportAfter = Environment.TickCount64;
+        nextNativeWatchlistPoll = 0;
+        nativeWatchlistSnapshot = "";
+        QueueProgressRequests();
+        DalamudServices.PluginLog.Information("成就追踪：手动刷新已排队，将重新读取原生目标列表和成就进度");
     }
 
     private void AddGoalById(uint achievementId, bool expanded)
@@ -705,17 +703,53 @@ public sealed unsafe class AchievementTracker : ModuleBase
         QueueProgressRequests();
     }
 
-    private unsafe void ImportNativeWatchlist()
+    private unsafe bool TryReadNativeWatchlist(out ulong listContentId, out ushort[] ids)
     {
+        listContentId = 0;
+        ids = Array.Empty<ushort>();
         var list = AchievementListModule.Instance();
-        if (list == null || list->CharacterContentId != activeContentId) return;
+        if (list == null) return false;
 
         var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
+        listContentId = list->CharacterContentId;
+        ids = list->WatchList[..count].ToArray();
+        return true;
+    }
+
+    private void SyncNativeWatchlist(string reason)
+    {
+        if (activeContentId == 0 || !TryReadNativeWatchlist(out var listContentId, out var ids))
+        {
+            if (reason != "framework")
+                DalamudServices.PluginLog.Warning($"成就追踪：无法读取原生目标列表，reason={reason}");
+            return;
+        }
+
+        // The game may leave this field at zero while the user-file module is
+        // loading. A non-zero value belonging to another character is still
+        // rejected so profiles cannot be mixed during character changes.
+        if (listContentId != 0 && listContentId != activeContentId)
+        {
+            var mismatch = $"mismatch:{listContentId:X16}";
+            if (nativeWatchlistSnapshot != mismatch)
+            {
+                nativeWatchlistSnapshot = mismatch;
+                DalamudServices.PluginLog.Warning(
+                    $"成就追踪：原生目标列表角色不匹配，当前={activeContentId:X16}, 列表={listContentId:X16}");
+            }
+            nativeWatchlistImported = false;
+            return;
+        }
+
+        var snapshot = $"{listContentId:X16}|{string.Join(',', ids)}";
+        if (snapshot == nativeWatchlistSnapshot && nativeWatchlistImported)
+            return;
+
+        nativeWatchlistSnapshot = snapshot;
         var existingIds = config.Goals.Select(goal => (uint)goal.Id).ToHashSet();
         var imported = 0;
-        for (var i = 0; i < count; i++)
+        foreach (var achievementId in ids)
         {
-            var achievementId = list->WatchList[i];
             if (achievementId == 0 || !existingIds.Add(achievementId)) continue;
             config.Goals.Add(new AchievementGoal
             {
@@ -735,7 +769,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             QueueProgressRequests();
         }
         DalamudServices.PluginLog.Information(
-            $"成就追踪：角色目标列表初始化完成，角色={activeContentId:X16}, 原生目标={count}, 新同步={imported}");
+            $"成就追踪：原生目标列表同步完成，reason={reason}, 当前角色={activeContentId:X16}, 列表角色={(listContentId == 0 ? "未提供" : listContentId.ToString("X16"))}, 原生目标={ids.Length}, 新同步={imported}, ID=[{string.Join(',', ids)}]");
     }
 
     private static string GetAchievementName(uint achievementId)
@@ -747,18 +781,11 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private void OnFrameworkUpdate(IFramework framework)
     {
         EnsureCharacterProfile();
-        if (activeContentId != 0 && !nativeWatchlistImported && Environment.TickCount64 >= nativeWatchlistImportAfter)
-            ImportNativeWatchlist();
-
-        if (pendingNativeAdds.Count > 0)
+        var now = Environment.TickCount64;
+        if (activeContentId != 0 && now >= nativeWatchlistImportAfter && now >= nextNativeWatchlistPoll)
         {
-            foreach (var achievementId in pendingNativeAdds.ToArray())
-            {
-                AddGoalById(achievementId, expanded: true);
-                DalamudServices.PluginLog.Information(
-                    $"成就追踪：原生加入目标列表已触发，角色={activeContentId:X16}, 成就ID={achievementId}");
-            }
-            pendingNativeAdds.Clear();
+            nextNativeWatchlistPoll = now + 500;
+            SyncNativeWatchlist("framework");
         }
 
         var achievement = FfxivAchievement.Instance();
@@ -808,9 +835,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
         achievementSearch.Clear();
         territorySearch.Clear();
         draftGoal = new AchievementGoal();
-        pendingNativeAdds.Clear();
         nativeWatchlistImported = false;
         nativeWatchlistImportAfter = 0;
+        nextNativeWatchlistPoll = 0;
+        nativeWatchlistSnapshot = "";
         legacyMigrationPending = false;
 
         if (contentId == 0) return;
@@ -828,6 +856,9 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
 
         nativeWatchlistImportAfter = Environment.TickCount64 + 2000;
+        nextNativeWatchlistPoll = 0;
+        DalamudServices.PluginLog.Information(
+            $"成就追踪：已加载角色配置，角色={activeContentId:X16}，将在登录数据稳定后读取原生目标列表");
         QueueProgressRequests();
     }
 
