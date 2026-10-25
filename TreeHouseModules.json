@@ -32,16 +32,6 @@
       "Sha256": "13457B1543FDADD34E75E19BF70B10FACF61DEC80AD5F0F0C3E49970CDB77A0C"
     },
     {
-      "InternalName": "QuickTransfer",
-      "Name": "快捷转移",
-      "Author": "Yuzi",
-      "Description": "按住修饰键左键单击物品，按目标界面优先级触发游戏原生的存放或取回命令。",
-      "Version": "0.1.1",
-      "MinimumOmniVersion": "1.1.6.6",
-      "File": "Modules/QuickTransfer.cs",
-      "Sha256": "3476D8F3DAB732D7D2CBB2D138460139E4667727F7078C822A17DDEA49AAEBC2"
-    },
-    {
       "InternalName": "LimitBreakAdjustments",
       "Name": "极限技调整",
       "Author": "Yuzi",
