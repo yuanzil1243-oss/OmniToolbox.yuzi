@@ -32,6 +32,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly Dictionary<int, string> achievementSearch = new();
     private readonly Dictionary<int, string> territorySearch = new();
     private AchievementGoal draftGoal = new();
+    private bool draftExpanded = true;
     private ulong activeContentId;
     private bool nativeWatchlistImported;
     private long nativeWatchlistImportAfter;
@@ -43,10 +44,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，自动同步原生目标列表并按角色保存。",
+        Description = "读取游戏原生成就进度，在悬浮窗中显示自定义目标；自动同步当前角色的原生目标列表，并分别保存每个角色的配置。",
         Commands = new[]
         {
-            new ModuleCommand("显示或隐藏成就追踪窗口", "成就追踪悬浮窗"),
+            new ModuleCommand("打开或关闭游戏内成就追踪悬浮窗", "成就追踪悬浮窗"),
         },
     };
     public override bool HasSettings => true;
@@ -112,6 +113,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             return false;
         }
 
+        NormalizeExpandedCards();
         var changed = false;
         var controlHeight = ImGui.GetFrameHeight();
 
@@ -122,68 +124,79 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.TableHeaderBg));
-            ImGui.TextUnformatted("添加目标成就");
-            ImGui.SameLine();
-            ImGui.TextDisabled("完成设置后点击保存，目标才会加入下方列表");
+            if (ImGui.Selectable(
+                    $"{(draftExpanded ? "▼" : "▶")} 添加目标成就 · 完成设置后点击保存##draft-toggle",
+                    draftExpanded,
+                    ImGuiSelectableFlags.None,
+                    new System.Numerics.Vector2(-1, controlHeight)))
+            {
+                draftExpanded = !draftExpanded;
+                if (draftExpanded) CollapseGoalCards();
+                changed = true;
+            }
 
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            ImGui.TextDisabled("成就名称");
-            changed |= DrawAchievementPicker(-1, draftGoal, false);
-
-            if (draftGoal.Id > 0)
+            if (draftExpanded)
             {
                 ImGui.TableNextRow();
                 ImGui.TableSetColumnIndex(0);
-                ImGui.TextDisabled("达成条件与进度");
-                DrawAchievementProgress(draftGoal);
+                ImGui.TextDisabled("成就名称");
+                changed |= DrawAchievementPicker(-1, draftGoal, false);
 
-                ImGui.TableNextRow();
-                ImGui.TableSetColumnIndex(0);
-                changed |= DrawTerritoryPicker(-1, draftGoal);
-
-                ImGui.TableNextRow();
-                ImGui.TableSetColumnIndex(0);
-                ImGui.TextDisabled("备注");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(-1);
-                changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
-
-                ImGui.TableNextRow();
-                ImGui.TableSetColumnIndex(0);
-                changed |= ImGui.Checkbox("完成后仍显示", ref draftGoal.ShowCompleted);
-
-                ImGui.TableNextRow();
-                ImGui.TableSetColumnIndex(0);
-                var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
-                if (ImGui.Button("保存目标", new System.Numerics.Vector2(actionWidth, controlHeight)))
+                if (draftGoal.Id > 0)
                 {
-                    config.Goals.Add(new AchievementGoal
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.TextDisabled("达成条件与进度");
+                    DrawAchievementProgress(draftGoal);
+
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    changed |= DrawTerritoryPicker(-1, draftGoal);
+
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.TextDisabled("备注");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(-1);
+                    changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
+
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    changed |= ImGui.Checkbox("完成后仍显示", ref draftGoal.ShowCompleted);
+
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
+                    if (ImGui.Button("保存目标", new System.Numerics.Vector2(actionWidth, controlHeight)))
                     {
-                        Id = draftGoal.Id,
-                        Name = draftGoal.Name,
-                        Region = draftGoal.Region,
-                        RegionGroup = draftGoal.RegionGroup,
-                        RegionId = draftGoal.RegionId,
-                        Note = draftGoal.Note,
-                        Enabled = draftGoal.Enabled,
-                        IgnoreRegion = draftGoal.IgnoreRegion,
-                        ShowCompleted = draftGoal.ShowCompleted,
-                        Regions = draftGoal.Regions.Select(x => x.Clone()).ToList(),
-                        Expanded = true,
-                    });
-                    draftGoal = new AchievementGoal();
-                    achievementSearch.Remove(-1);
-                    territorySearch.Remove(-1);
-                    changed = true;
-                }
-                ImGui.SameLine();
-                if (ImGui.Button("清空编辑", new System.Numerics.Vector2(actionWidth, controlHeight)))
-                {
-                    draftGoal = new AchievementGoal();
-                    achievementSearch.Remove(-1);
-                    territorySearch.Remove(-1);
-                    changed = true;
+                        config.Goals.Add(new AchievementGoal
+                        {
+                            Id = draftGoal.Id,
+                            Name = draftGoal.Name,
+                            Region = draftGoal.Region,
+                            RegionGroup = draftGoal.RegionGroup,
+                            RegionId = draftGoal.RegionId,
+                            Note = draftGoal.Note,
+                            Enabled = draftGoal.Enabled,
+                            IgnoreRegion = draftGoal.IgnoreRegion,
+                            ShowCompleted = draftGoal.ShowCompleted,
+                            Regions = draftGoal.Regions.Select(x => x.Clone()).ToList(),
+                            Expanded = true,
+                        });
+                        draftGoal = new AchievementGoal();
+                        draftExpanded = false;
+                        achievementSearch.Remove(-1);
+                        territorySearch.Remove(-1);
+                        changed = true;
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("清空编辑", new System.Numerics.Vector2(actionWidth, controlHeight)))
+                    {
+                        draftGoal = new AchievementGoal();
+                        achievementSearch.Remove(-1);
+                        territorySearch.Remove(-1);
+                        changed = true;
+                    }
                 }
             }
             ImGui.EndTable();
@@ -221,7 +234,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
                         ImGuiSelectableFlags.None,
                         new System.Numerics.Vector2(titleWidth, controlHeight)))
                 {
-                    goal.Expanded = !goal.Expanded;
+                    var expand = !goal.Expanded;
+                    CollapseGoalCards();
+                    goal.Expanded = expand;
+                    if (expand) draftExpanded = false;
                     changed = true;
                 }
                 ImGui.SameLine();
@@ -274,7 +290,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextDisabled("暂无目标。可使用上方搜索添加，或加入游戏原生目标列表后自动同步。");
 
         if (ImGui.BeginTable("##display-options", 2,
-                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerV
+                ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerH
                 | ImGuiTableFlags.SizingStretchSame | ImGuiTableFlags.NoSavedSettings))
         {
             ImGui.TableNextRow();
@@ -374,6 +390,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
                         if (ImGui.Selectable($"{candidateName}##achievement-{index}-{candidate.RowId}", goal.Id == candidate.RowId))
                         {
                             SetAchievement(goal, candidate);
+                            if (index >= 0)
+                            {
+                                CollapseGoalCards();
+                                goal.Expanded = true;
+                                draftExpanded = false;
+                            }
                             ImGui.CloseCurrentPopup();
                             changed = true;
                         }
@@ -406,6 +428,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
 
         ImGui.TextWrapped(row.Value.Description.ToString());
+        if (!HasAchievementProgress(row.Value))
+        {
+            ImGui.TextDisabled("此成就没有进度计数器");
+            return;
+        }
+
         progress.TryGetValue((uint)goal.Id, out var state);
         var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
         ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
@@ -594,6 +622,36 @@ public sealed unsafe class AchievementTracker : ModuleBase
         goal.Enabled = true;
     }
 
+    private void CollapseGoalCards()
+    {
+        foreach (var goal in config.Goals)
+            goal.Expanded = false;
+    }
+
+    private void NormalizeExpandedCards()
+    {
+        if (draftExpanded)
+        {
+            CollapseGoalCards();
+            return;
+        }
+
+        var foundExpanded = false;
+        foreach (var goal in config.Goals.Where(goal => goal.Expanded))
+        {
+            if (foundExpanded)
+                goal.Expanded = false;
+            else
+                foundExpanded = true;
+        }
+    }
+
+    private static bool HasAchievementProgress(LuminaAchievement row)
+    {
+        var target = row.AchievementTarget.ValueNullable;
+        return target.HasValue && target.Value.Type != 0;
+    }
+
     private static string GetAchievementCategory(LuminaAchievement row)
     {
         var category = row.AchievementCategory.ValueNullable;
@@ -622,9 +680,13 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         if (activeContentId == 0 || !config.ShowOverlay) return;
         ImGui.SetNextWindowBgAlpha(config.Opacity);
-        var flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize;
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(380, 360), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSizeConstraints(
+            new System.Numerics.Vector2(280, 120),
+            new System.Numerics.Vector2(480, 720));
+        var flags = ImGuiWindowFlags.NoTitleBar;
         if (!ImGui.Begin("##AchievementTrackerOverlay", flags)) { ImGui.End(); return; }
-        ImGui.TextUnformatted("目标成就 · " + (string.IsNullOrEmpty(currentRegion) ? "未知地区" : currentRegion));
+        ImGui.TextUnformatted("目标成就");
         foreach (var goal in config.Goals)
         {
             MigrateLegacyRegion(goal);
@@ -649,8 +711,17 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? $"无效成就 ID: {goal.Id}" : goal.Name));
             if (!string.IsNullOrWhiteSpace(goal.Note))
                 ImGui.TextDisabled(goal.Note);
+
+            if (row.HasValue && !HasAchievementProgress(row.Value))
+            {
+                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
+                ImGui.TextWrapped($"目标：{row.Value.Description}");
+                ImGui.PopTextWrapPos();
+                continue;
+            }
+
             var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
-            ImGui.ProgressBar(ratio, new System.Numerics.Vector2(220, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
+            ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
             ImGui.TextColored(completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1), completed ? "已完成" : "进行中");
         }
         ImGui.End();
