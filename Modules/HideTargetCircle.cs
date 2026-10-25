@@ -1,12 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
+using OmenTools;
 using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
@@ -18,12 +17,11 @@ public sealed unsafe class HideTargetCircle : ModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly HideTargetCircleConfig config = new();
-    private GameObject* modifiedTarget;
-    private byte originalTargetStatus;
-    private bool hasOriginalTargetStatus;
+    private readonly Stopwatch combatBufferTimer = new();
+    private uint originalTargetCircleType;
+    private bool hasOriginalTargetCircleType;
     private bool wasInCombat;
     private bool combatStateInitialized;
-    private DateTime combatEndedAt;
 
     public override ModuleInfo Info { get; } = new()
     {
@@ -35,13 +33,21 @@ public sealed unsafe class HideTargetCircle : ModuleBase
     protected override void OnEnable()
     {
         LoadConfig();
+        originalTargetCircleType = DService.Instance().GameConfig.UiControl.GetUInt("TargetCircleType");
+        hasOriginalTargetCircleType = true;
+        combatBufferTimer.Reset();
+        wasInCombat = false;
+        combatStateInitialized = false;
         DalamudServices.Framework.Update += OnFrameworkUpdate;
     }
 
     protected override void OnDisable()
     {
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
-        RestoreTarget();
+        if (hasOriginalTargetCircleType)
+            DService.Instance().GameConfig.UiControl.Set("TargetCircleType", originalTargetCircleType);
+        hasOriginalTargetCircleType = false;
+        combatBufferTimer.Reset();
         wasInCombat = false;
         combatStateInitialized = false;
     }
@@ -53,58 +59,35 @@ public sealed unsafe class HideTargetCircle : ModuleBase
         if (config.ShowInCombat)
         {
             ImGui.SetNextItemWidth(180);
-            changed |= ImGui.DragFloat("战斗结束后延迟隐藏（秒）", ref config.CombatEndDelaySeconds, 0.1f, 0, 600, "%.1f");
+            changed |= ImGui.DragFloat("战斗结束后延迟隐藏（秒）", ref config.CombatEndDelaySeconds, 0.1f, 0, 300, "%.1f");
         }
-        config.CombatEndDelaySeconds = Math.Clamp(config.CombatEndDelaySeconds, 0, 600);
+        config.CombatEndDelaySeconds = Math.Clamp(config.CombatEndDelaySeconds, 0, 300);
         if (changed) SaveConfig();
         return changed;
     }
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        var control = Control.Instance();
-        if (control == null)
-        {
-            RestoreTarget();
-            wasInCombat = false;
-            return;
-        }
-
-        var inCombat = Conditions.Instance()->InCombat;
+        var services = DService.Instance();
+        var inCombat = services.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
         if (combatStateInitialized && wasInCombat && !inCombat)
-            combatEndedAt = DateTime.UtcNow;
+            combatBufferTimer.Restart();
+        else if (inCombat)
+            combatBufferTimer.Restart();
+        else if (combatStateInitialized && !wasInCombat && !inCombat && combatBufferTimer.IsRunning
+                 && combatBufferTimer.Elapsed.TotalSeconds >= config.CombatEndDelaySeconds)
+            combatBufferTimer.Stop();
         wasInCombat = inCombat;
         combatStateInitialized = true;
 
-        var show = (config.ShowWhenWeaponDrawn && control->TargetSystem.TargetCircleManager.WeaponDrawn)
+        var weaponDrawn = services.ObjectTable.LocalPlayer?.StatusFlags.HasFlag(StatusFlags.WeaponOut) == true;
+        var show = (config.ShowWhenWeaponDrawn && weaponDrawn)
             || (config.ShowInCombat && (inCombat
-                || (combatEndedAt != default
-                    && (DateTime.UtcNow - combatEndedAt).TotalSeconds < config.CombatEndDelaySeconds)));
-        var target = control->TargetSystem.Target;
-        if (target == null || show)
-        {
-            RestoreTarget();
-            return;
-        }
-
-        if (modifiedTarget != target)
-        {
-            RestoreTarget();
-            modifiedTarget = target;
-            originalTargetStatus = target->NextTargetStatus;
-            hasOriginalTargetStatus = true;
-        }
-
-        if (target->NextTargetStatus != 0)
-            target->NextTargetStatus = 0;
-    }
-
-    private void RestoreTarget()
-    {
-        if (modifiedTarget != null && hasOriginalTargetStatus)
-            modifiedTarget->NextTargetStatus = originalTargetStatus;
-        modifiedTarget = null;
-        hasOriginalTargetStatus = false;
+                || (combatBufferTimer.IsRunning && combatBufferTimer.Elapsed.TotalSeconds < config.CombatEndDelaySeconds)));
+        var targetCircleType = show ? 1u : 0u;
+        var uiControl = services.GameConfig.UiControl;
+        if (uiControl.GetUInt("TargetCircleType") != targetCircleType)
+            uiControl.Set("TargetCircleType", targetCircleType);
     }
 
     private static string ConfigPath => Path.Combine(
@@ -119,7 +102,7 @@ public sealed unsafe class HideTargetCircle : ModuleBase
             if (saved == null) return;
             config.ShowWhenWeaponDrawn = saved.ShowWhenWeaponDrawn;
             config.ShowInCombat = saved.ShowInCombat;
-            config.CombatEndDelaySeconds = Math.Clamp(saved.CombatEndDelaySeconds, 0, 600);
+            config.CombatEndDelaySeconds = Math.Clamp(saved.CombatEndDelaySeconds, 0, 300);
         }
         catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取隐藏目标圈配置失败"); }
     }
