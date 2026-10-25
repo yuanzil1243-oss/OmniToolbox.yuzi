@@ -6,10 +6,10 @@
       "Name": "成就追踪",
       "Author": "Yuzi",
       "Description": "读取游戏原生成就进度并显示不限数量的目标；有计数器的成就显示进度，无计数器的成就显示达成条件；自动同步原生目标列表并按角色保存。",
-      "Version": "0.5.8",
+      "Version": "0.5.9",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "0DE02E8EB5A3496F55A650FD8FD20DC6D22A40485AE7193FB0BE71AF7089A976"
+      "Sha256": "DCF375131237EE5D61FDC0FD8E3FC4E29A4372EBF1B9FA7803B070414F9A8EB1"
     },
     {
       "InternalName": "SellOnClick",

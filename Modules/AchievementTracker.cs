@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
@@ -13,6 +14,7 @@ using OmenTools.Info.Game.Enums;
 using OmenTools.Extensions;
 using FfxivAchievement = FFXIVClientStructs.FFXIV.Client.Game.UI.Achievement;
 using LuminaAchievement = Lumina.Excel.Sheets.Achievement;
+using LuminaMap = Lumina.Excel.Sheets.Map;
 using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
@@ -39,15 +41,20 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private long nextNativeWatchlistPoll;
     private string nativeWatchlistSnapshot = "";
     private bool legacyMigrationPending;
+    private bool omniCommandAttached;
+    private CommandInfo? originalOmniCommand;
+    private CommandInfo? attachedOmniCommand;
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
+    private const string OmniCommand = "/omni";
+    private const string OmniOverlayCommand = "成就追踪悬浮窗";
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "读取游戏原生成就进度，在悬浮窗中显示自定义目标；自动同步当前角色的原生目标列表，并分别保存每个角色的配置。",
         Commands = new[]
         {
-            new ModuleCommand("打开或关闭游戏内成就追踪悬浮窗", "成就追踪悬浮窗"),
+            new ModuleCommand("打开或关闭游戏内成就追踪悬浮窗", "/omni 成就追踪悬浮窗"),
         },
     };
     public override bool HasSettings => true;
@@ -66,14 +73,19 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
 
         if (!new[] { command, arguments }.Any(value =>
-                string.Equals(Normalize(value), "成就追踪悬浮窗", StringComparison.Ordinal)))
+                Normalize(value) is OmniOverlayCommand or "AchievementTracker" or "achievementtracker"))
             return false;
 
+        ToggleOverlay();
+        return true;
+    }
+
+    private void ToggleOverlay()
+    {
         EnsureCharacterProfile();
-        if (activeContentId == 0) return false;
+        if (activeContentId == 0) return;
         config.ShowOverlay = !config.ShowOverlay;
         SaveConfig();
-        return true;
     }
 
     protected override void OnEnable()
@@ -86,6 +98,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         EnsureCharacterProfile();
+        TryAttachOmniCommand();
     }
 
     protected override void OnDisable()
@@ -96,12 +109,87 @@ public sealed unsafe class AchievementTracker : ModuleBase
         SaveConfig();
         progressHook?.Dispose();
         progressHook = null;
+        RestoreOmniCommand();
         progress.Clear();
         requests.Clear();
         activeContentId = 0;
         nativeWatchlistImported = false;
         nextNativeWatchlistPoll = 0;
         nativeWatchlistSnapshot = "";
+    }
+
+    private void TryAttachOmniCommand()
+    {
+        if (omniCommandAttached
+            || !DalamudServices.CommandManager.Commands.TryGetValue(OmniCommand, out var current))
+            return;
+
+        if (current is not CommandInfo original)
+        {
+            DalamudServices.PluginLog.Warning("成就追踪：当前 /omni 命令处理器不支持接入，在线命令不可用");
+            return;
+        }
+
+        var routed = new CommandInfo((command, arguments) =>
+        {
+            var parts = arguments.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (omniCommandAttached && parts.Length == 1
+                && TryHandleCommand(parts[0], string.Empty))
+                return;
+
+            original.Handler(command, arguments);
+        })
+        {
+            HelpMessage = original.HelpMessage,
+            ShowInHelp = original.ShowInHelp,
+            DisplayOrder = original.DisplayOrder,
+            AllowedInMacros = original.AllowedInMacros,
+        };
+
+        if (!DalamudServices.CommandManager.RemoveHandler(OmniCommand))
+        {
+            DalamudServices.PluginLog.Warning("成就追踪：无法接入 /omni 命令处理器");
+            return;
+        }
+
+        try
+        {
+            if (!DalamudServices.CommandManager.AddHandler(OmniCommand, routed))
+                throw new InvalidOperationException("注册包装处理器失败");
+
+            originalOmniCommand = original;
+            attachedOmniCommand = routed;
+            omniCommandAttached = true;
+            DalamudServices.PluginLog.Information("成就追踪：已接入 /omni 成就追踪悬浮窗命令");
+        }
+        catch (Exception exception)
+        {
+            if (!DalamudServices.CommandManager.Commands.ContainsKey(OmniCommand))
+                DalamudServices.CommandManager.AddHandler(OmniCommand, original);
+            DalamudServices.PluginLog.Error(exception, "成就追踪：接入 /omni 命令失败");
+        }
+    }
+
+    private void RestoreOmniCommand()
+    {
+        omniCommandAttached = false;
+        if (originalOmniCommand == null || attachedOmniCommand == null)
+            return;
+
+        var commands = DalamudServices.CommandManager;
+        if (commands.Commands.TryGetValue(OmniCommand, out var current)
+            && ReferenceEquals(current, attachedOmniCommand))
+        {
+            if (commands.RemoveHandler(OmniCommand) && !commands.AddHandler(OmniCommand, originalOmniCommand))
+            {
+                if (!commands.Commands.ContainsKey(OmniCommand))
+                    commands.AddHandler(OmniCommand, attachedOmniCommand);
+                DalamudServices.PluginLog.Error("成就追踪：无法恢复原 /omni 命令处理器");
+            }
+        }
+
+        originalOmniCommand = null;
+        attachedOmniCommand = null;
     }
 
     public override bool DrawSettings()
@@ -124,11 +212,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.TableHeaderBg));
-            if (ImGui.Selectable(
-                    $"{(draftExpanded ? "▼" : "▶")} 添加目标成就 · 完成设置后点击保存##draft-toggle",
-                    draftExpanded,
-                    ImGuiSelectableFlags.None,
-                    new System.Numerics.Vector2(-1, controlHeight)))
+            if (DrawDraftHeader(draftExpanded, controlHeight))
             {
                 draftExpanded = !draftExpanded;
                 if (draftExpanded) CollapseGoalCards();
@@ -389,7 +473,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                         ImGui.TableSetColumnIndex(0);
                         if (ImGui.Selectable($"{candidateName}##achievement-{index}-{candidate.RowId}", goal.Id == candidate.RowId))
                         {
-                            SetAchievement(goal, candidate);
+                            SetAchievement(goal, candidate, index < 0 && goal.Id <= 0);
                             if (index >= 0)
                             {
                                 CollapseGoalCards();
@@ -428,15 +512,25 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
 
         ImGui.TextWrapped(row.Value.Description.ToString());
-        if (!HasAchievementProgress(row.Value))
+        var declaredTarget = GetDeclaredAchievementTarget(row.Value);
+        if (!progress.TryGetValue((uint)goal.Id, out var state))
         {
-            ImGui.TextDisabled("此成就没有进度计数器");
+            ImGui.TextDisabled(declaredTarget > 0
+                ? $"目标：{declaredTarget}（正在读取当前进度…）"
+                : "正在读取成就进度…");
             return;
         }
 
-        progress.TryGetValue((uint)goal.Id, out var state);
+        if (state.Max == 0)
+        {
+            ImGui.TextDisabled(declaredTarget > 0
+                ? $"目标：{declaredTarget}（游戏未返回当前计数）"
+                : "此成就没有进度计数器");
+            return;
+        }
+
         var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
-        ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
+        ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), $"{state.Current} / {state.Max} ({ratio:P0})");
     }
 
     private bool DrawTerritoryPicker(int index, AchievementGoal goal)
@@ -615,11 +709,65 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return changed;
     }
 
-    private static void SetAchievement(AchievementGoal goal, LuminaAchievement row)
+    private static void SetAchievement(AchievementGoal goal, LuminaAchievement row, bool applyRegionPreset = false)
     {
         goal.Id = (int)row.RowId;
         goal.Name = row.Name.ToString();
         goal.Enabled = true;
+        if (applyRegionPreset)
+            ApplyRegionPreset(goal, row);
+    }
+
+    private static void ApplyRegionPreset(AchievementGoal goal, LuminaAchievement row)
+    {
+        var regions = GetExplicitAchievementRegions(row);
+        if (regions.Count is 0 or > 10) return;
+
+        goal.IgnoreRegion = false;
+        goal.Regions = regions;
+        SyncLegacyRegionFields(goal);
+    }
+
+    private static List<AchievementRegion> GetExplicitAchievementRegions(LuminaAchievement row)
+    {
+        // Achievement type 8 points directly to a Map row that resolves to one TerritoryType.
+        if (row.Type != 8) return new List<AchievementRegion>();
+
+        var map = DalamudServices.DataManager.GetExcelSheet<LuminaMap>().GetRowOrDefault(row.Key.RowId);
+        if (!map.HasValue) return new List<AchievementRegion>();
+
+        var territory = map.Value.TerritoryType.ValueNullable;
+        if (!territory.HasValue || territory.Value.RowId == 0)
+            return new List<AchievementRegion>();
+
+        var group = territory.Value.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "";
+        var area = territory.Value.PlaceName.ValueNullable?.Name.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(area)) return new List<AchievementRegion>();
+
+        return new List<AchievementRegion>
+        {
+            new()
+            {
+                Id = (int)territory.Value.RowId,
+                Group = group,
+                Name = area,
+            },
+        };
+    }
+
+    private static bool DrawDraftHeader(bool expanded, float height)
+    {
+        var start = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton("##draft-toggle", new System.Numerics.Vector2(-1, height));
+        var end = ImGui.GetItemRectMax();
+        var label = expanded ? "▼ 手动添加目标成就" : "▶ 手动添加目标成就";
+        var hint = expanded ? "完成设置后点击保存" : "点击展开";
+        ImGui.SetCursorScreenPos(start + new System.Numerics.Vector2(8, (height - ImGui.GetTextLineHeight()) * 0.5f));
+        ImGui.TextUnformatted(label);
+        ImGui.SameLine();
+        ImGui.TextDisabled(hint);
+        ImGui.SetCursorScreenPos(new System.Numerics.Vector2(start.X, end.Y));
+        return clicked;
     }
 
     private void CollapseGoalCards()
@@ -646,12 +794,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         }
     }
 
-    private static bool HasAchievementProgress(LuminaAchievement row)
-    {
-        var target = row.AchievementTarget.ValueNullable;
-        return target.HasValue && target.Value.Type != 0;
-    }
-
     private static string GetAchievementCategory(LuminaAchievement row)
     {
         var category = row.AchievementCategory.ValueNullable;
@@ -662,6 +804,19 @@ public sealed unsafe class AchievementTracker : ModuleBase
         if (string.IsNullOrWhiteSpace(kindName)) return string.IsNullOrWhiteSpace(categoryName) ? "未分类" : categoryName;
         if (string.IsNullOrWhiteSpace(categoryName)) return kindName;
         return $"{kindName} - {categoryName}";
+    }
+
+    private static uint GetDeclaredAchievementTarget(LuminaAchievement row)
+    {
+        try
+        {
+            var target = row.Data[0].RowId;
+            return target;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static string GetGoalSummary(AchievementGoal goal)
@@ -703,25 +858,46 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 if (!string.IsNullOrWhiteSpace(goal.Note)) ImGui.TextDisabled(goal.Note);
                 continue;
             }
-            progress.TryGetValue((uint)goal.Id, out var state);
-            var completed = state.Max > 0 && state.Current >= state.Max;
-            if (!goal.ShowCompleted && completed) continue;
             var row = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>().GetRowOrDefault((uint)goal.Id);
+            var hasProgressResponse = progress.TryGetValue((uint)goal.Id, out var state);
+            var declaredTarget = row.HasValue ? GetDeclaredAchievementTarget(row.Value) : 0;
+            var hasProgressCounter = hasProgressResponse && state.Max > 0;
+            var completed = hasProgressCounter && state.Current >= state.Max;
+            if (!goal.ShowCompleted && completed) continue;
             ImGui.Separator();
             ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? $"无效成就 ID: {goal.Id}" : goal.Name));
             if (!string.IsNullOrWhiteSpace(goal.Note))
                 ImGui.TextDisabled(goal.Note);
 
-            if (row.HasValue && !HasAchievementProgress(row.Value))
+            if (!hasProgressCounter)
             {
-                ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
-                ImGui.TextWrapped($"目标：{row.Value.Description}");
-                ImGui.PopTextWrapPos();
+                if (hasProgressResponse && row.HasValue && declaredTarget == 0)
+                {
+                    ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
+                    ImGui.TextWrapped($"目标：{row.Value.Description}");
+                    ImGui.PopTextWrapPos();
+                }
+                else
+                {
+                    var progressStatus = !hasProgressResponse
+                        ? declaredTarget > 0 ? $"目标：{declaredTarget}（正在读取当前进度…）" : "正在读取成就进度…"
+                        : declaredTarget > 0 ? $"目标：{declaredTarget}（游戏未返回当前计数）" : null;
+                    if (progressStatus != null)
+                    {
+                        ImGui.TextDisabled(progressStatus);
+                    }
+                    else if (row.HasValue)
+                    {
+                        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
+                        ImGui.TextWrapped($"目标：{row.Value.Description}");
+                        ImGui.PopTextWrapPos();
+                    }
+                }
                 continue;
             }
 
-            var ratio = state.Max == 0 ? 0 : Math.Clamp(state.Current / (float)state.Max, 0, 1);
-            ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), state.Max == 0 ? "读取中…" : $"{state.Current} / {state.Max} ({ratio:P0})");
+            var ratio = Math.Clamp(state.Current / (float)state.Max, 0, 1);
+            ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), $"{state.Current} / {state.Max} ({ratio:P0})");
             ImGui.TextColored(completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1), completed ? "已完成" : "进行中");
         }
         ImGui.End();
@@ -761,7 +937,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             return;
         }
 
-        config.Goals.Add(new AchievementGoal
+        var addedGoal = new AchievementGoal
         {
             Id = (int)achievementId,
             Name = GetAchievementName(achievementId),
@@ -769,7 +945,12 @@ public sealed unsafe class AchievementTracker : ModuleBase
             IgnoreRegion = true,
             Region = "",
             Expanded = expanded,
-        });
+        };
+        var addedRow = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>()
+            .GetRowOrDefault(achievementId);
+        if (addedRow.HasValue)
+            ApplyRegionPreset(addedGoal, addedRow.Value);
+        config.Goals.Add(addedGoal);
         SaveConfig();
         QueueProgressRequests();
     }
@@ -822,14 +1003,19 @@ public sealed unsafe class AchievementTracker : ModuleBase
         foreach (var achievementId in ids)
         {
             if (achievementId == 0 || !existingIds.Add(achievementId)) continue;
-            config.Goals.Add(new AchievementGoal
+            var importedGoal = new AchievementGoal
             {
                 Id = achievementId,
                 Name = GetAchievementName(achievementId),
                 Enabled = true,
                 IgnoreRegion = true,
                 Expanded = false,
-            });
+            };
+            var importedRow = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>()
+                .GetRowOrDefault(achievementId);
+            if (importedRow.HasValue)
+                ApplyRegionPreset(importedGoal, importedRow.Value);
+            config.Goals.Add(importedGoal);
             imported++;
         }
 
