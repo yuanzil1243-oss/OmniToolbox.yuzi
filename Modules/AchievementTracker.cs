@@ -906,9 +906,11 @@ public sealed unsafe class AchievementTracker : ModuleBase
             var declaredTarget = row.HasValue ? GetDeclaredAchievementTarget(row.Value) : 0;
             var hasProgressCounter = hasProgressResponse && state.Max > 0;
             var description = row.HasValue ? row.Value.Description.ToString() : "";
-            var showCondition = row.HasValue
-                && (IsAchievementPrerequisiteDescription(description)
-                    || (hasProgressCounter && state.Max == 1));
+            IReadOnlyList<uint> prerequisiteIds = row.HasValue ? GetAchievementPrerequisiteIds(row.Value) : Array.Empty<uint>();
+            var hasPrerequisiteList = row.HasValue
+                && IsAchievementPrerequisiteDescription(description)
+                && prerequisiteIds.Count > 0;
+            var showCondition = row.HasValue && (hasPrerequisiteList || (hasProgressCounter && state.Max == 1));
             var completed = hasProgressCounter && state.Current >= state.Max;
             if (!goal.ShowCompleted && completed) continue;
             ImGui.Separator();
@@ -916,8 +918,20 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (!string.IsNullOrWhiteSpace(goal.Note))
                 ImGui.TextDisabled(goal.Note);
 
+            if (hasPrerequisiteList)
+            {
+                DrawAchievementPrerequisiteList(prerequisiteIds);
+                continue;
+            }
+
             if (showCondition)
                 DrawWrappedOverlayText($"达成条件：{description}");
+
+            if (hasProgressCounter && state.Max == 1)
+            {
+                DrawAchievementStatus(completed);
+                continue;
+            }
 
             if (!hasProgressCounter)
             {
@@ -949,13 +963,59 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
             var ratio = Math.Clamp(state.Current / (float)state.Max, 0, 1);
             ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), $"{state.Current} / {state.Max} ({ratio:P0})");
-            ImGui.TextColored(completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1), completed ? "已完成" : "进行中");
+            DrawAchievementStatus(completed);
         }
         ImGui.End();
     }
 
     private static bool IsAchievementPrerequisiteDescription(string description)
         => description.Contains("成就", StringComparison.Ordinal);
+
+    private static List<uint> GetAchievementPrerequisiteIds(LuminaAchievement row)
+    {
+        if (row.Type != 2) return new List<uint>();
+
+        var ids = new List<uint>();
+        AddAchievementId(row.Key.RowId, ids);
+        foreach (var reference in row.Data)
+            AddAchievementId(reference.RowId, ids);
+        return ids;
+    }
+
+    private static void AddAchievementId(uint id, ICollection<uint> ids)
+    {
+        if (id > 0 && !ids.Contains(id))
+            ids.Add(id);
+    }
+
+    private static void DrawAchievementPrerequisiteList(IReadOnlyList<uint> prerequisiteIds)
+    {
+        ImGui.TextDisabled("达成条件：");
+        var achievement = FfxivAchievement.Instance();
+        var completionLoaded = achievement != null
+            && achievement->State == FfxivAchievement.AchievementState.Loaded;
+        foreach (var id in prerequisiteIds)
+        {
+            var name = GetAchievementName(id);
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            var completed = completionLoaded && achievement->IsComplete((int)id);
+            var marker = completed ? "✓" : completionLoaded ? "□" : "…";
+            if (completed)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.3f, 1, 0.6f, 1), $"{marker} {name}");
+            }
+            else
+            {
+                ImGui.TextDisabled($"{marker} {name}");
+            }
+        }
+    }
+
+    private static void DrawAchievementStatus(bool completed)
+        => ImGui.TextColored(
+            completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1),
+            completed ? "已完成" : "进行中");
 
     private static void DrawWrappedOverlayText(string text)
     {
