@@ -7,11 +7,12 @@ using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.Interop;
-using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.OmenService;
 using OmniToolbox.Common.Module.Abstractions;
@@ -45,6 +46,9 @@ public sealed unsafe class QuickTransfer : ModuleBase
     };
     private readonly QuickTransferConfig config = new();
     private AddonEventRegistry? addonEvents;
+    private Hook<AgentInventoryContext.Delegates.OpenForItemSlot>? contextHook;
+    private bool pendingTransfer;
+    private bool dispatching;
 
     public override ModuleInfo Info { get; } = new()
     {
@@ -56,15 +60,32 @@ public sealed unsafe class QuickTransfer : ModuleBase
     protected override void OnEnable()
     {
         LoadConfig();
-        addonEvents = new AddonEventRegistry(DalamudServices.AddonLifecycle);
-        foreach (var name in GridAddonNames)
-            addonEvents.Register(AddonEvent.PreReceiveEvent, name, OnReceiveEvent);
+        try
+        {
+            contextHook = DService.Instance().Hook.HookFromAddress<AgentInventoryContext.Delegates.OpenForItemSlot>(
+                AgentInventoryContext.MemberFunctionPointers.OpenForItemSlot, OnOpenContext);
+            contextHook.Enable();
+            addonEvents = new AddonEventRegistry(DalamudServices.AddonLifecycle);
+            foreach (var name in GridAddonNames)
+                addonEvents.Register(AddonEvent.PreReceiveEvent, name, OnReceiveEvent);
+        }
+        catch
+        {
+            addonEvents?.Dispose();
+            addonEvents = null;
+            contextHook?.Dispose();
+            contextHook = null;
+            throw;
+        }
     }
 
     protected override void OnDisable()
     {
         addonEvents?.Dispose();
         addonEvents = null;
+        contextHook?.Dispose();
+        contextHook = null;
+        pendingTransfer = false;
     }
 
     private static readonly string[] GridAddonNames =
@@ -233,23 +254,120 @@ public sealed unsafe class QuickTransfer : ModuleBase
             return;
         }
 
-        foreach (var group in config.Priority)
+        var context = AgentInventoryContext.Instance();
+        if (context == null || contextHook == null || pendingTransfer)
         {
-            if (group == GroupFor(sourceType.Value) || !IsGroupOpen(group)) continue;
-            foreach (var target in TypesFor(group))
-            {
-                var container = inventory->GetInventoryContainer(target);
-                if (container == null || !container->IsLoaded) continue;
-                var maxStack = DalamudServices.DataManager.GetExcelSheet<Item>()
-                    .GetRow(source->GetBaseItemId()).StackSize;
-                var targetSlot = FindTargetSlot(container, source->ItemId, maxStack);
-                if (targetSlot < 0) continue;
-                inventory->MoveItemSlot(sourceType.Value, (ushort)sourceSlot, target, (ushort)targetSlot);
-                NotifyHelper.SystemWarning();
-                return;
-            }
+            NotifyHelper.SystemWarning();
+            return;
         }
+
+        pendingTransfer = true;
+        try
+        {
+            context->OpenForItemSlot(sourceType.Value, sourceSlot, 0, addon->Id);
+        }
+        catch (Exception ex)
+        {
+            pendingTransfer = false;
+            DalamudServices.PluginLog.Error(ex, "快捷转移未能打开游戏原生物品菜单");
+            NotifyHelper.SystemWarning();
+        }
+    }
+
+    private void OnOpenContext(AgentInventoryContext* context, InventoryType inventory, int slot, int flags, uint owner)
+    {
+        contextHook!.Original(context, inventory, slot, flags, owner);
+        if (!pendingTransfer || context == null) return;
+
+        pendingTransfer = false;
+        if (dispatching) return;
+        try
+        {
+            dispatching = true;
+            ExecuteNativeTransfer(context, inventory);
+        }
+        catch (Exception ex)
+        {
+            DalamudServices.PluginLog.Error(ex, "快捷转移原生菜单命令执行失败");
+            NotifyHelper.SystemWarning();
+        }
+        finally
+        {
+            dispatching = false;
+        }
+    }
+
+    private void ExecuteNativeTransfer(AgentInventoryContext* context, InventoryType sourceType)
+    {
+        var menu = RaptureAtkUnitManager.Instance()->GetAddonById((ushort)context->GetAddonId());
+        if (menu == null || !menu->IsVisible)
+        {
+            NotifyHelper.SystemWarning();
+            return;
+        }
+
+        for (var i = 0; i < context->ContextItemCount && i < 32; i++)
+        {
+            var index = context->ContexItemStartIndex + i;
+            if (index < 0 || index >= context->EventParams.Length || context->IsContextItemDisabled(i)) continue;
+            ref var value = ref context->EventParams[index];
+            if (value.Type != AtkValueType.String) continue;
+
+            var target = TargetForNativeCommand(value.String.ToString(), sourceType);
+            if (!target.HasValue || target.Value == GroupFor(sourceType) || !IsGroupOpen(target.Value)) continue;
+            if (Array.IndexOf(config.Priority, target.Value) < 0) continue;
+
+            var priorityIndex = Array.IndexOf(config.Priority, target.Value);
+            if (priorityIndex != GetBestAvailablePriority(context, sourceType)) continue;
+
+            AtkValue* callbackArgs = stackalloc AtkValue[5];
+            callbackArgs[0].SetInt(0);
+            callbackArgs[1].SetInt(i);
+            callbackArgs[2].SetUInt(0);
+            callbackArgs[3].SetInt(0);
+            callbackArgs[4].SetInt(0);
+            menu->FireCallback(5, callbackArgs);
+            context->Hide();
+            menu->Close(false);
+            NotifyHelper.SystemWarning();
+            return;
+        }
+
+        context->Hide();
+        menu->Close(false);
         NotifyHelper.SystemWarning();
+    }
+
+    private int GetBestAvailablePriority(AgentInventoryContext* context, InventoryType sourceType)
+    {
+        var best = int.MaxValue;
+        for (var i = 0; i < context->ContextItemCount && i < 32; i++)
+        {
+            var index = context->ContexItemStartIndex + i;
+            if (index < 0 || index >= context->EventParams.Length || context->IsContextItemDisabled(i)) continue;
+            ref var value = ref context->EventParams[index];
+            if (value.Type != AtkValueType.String) continue;
+            var target = TargetForNativeCommand(value.String.ToString(), sourceType);
+            if (!target.HasValue || target.Value == GroupFor(sourceType) || !IsGroupOpen(target.Value)) continue;
+            var priority = Array.IndexOf(config.Priority, target.Value);
+            if (priority >= 0 && priority < best) best = priority;
+        }
+        return best;
+    }
+
+    private static InventoryType? TargetForNativeCommand(string label, InventoryType sourceType)
+    {
+        var normalized = label.Trim().TrimEnd('.', '…', ' ');
+        return normalized switch
+        {
+            "放入背包" or "Put in Inventory" when GroupFor(sourceType) == InventoryType.ArmoryMainHand => InventoryType.Inventory1,
+            "从陆行鸟鞍囊中取回" or "Retrieve from Saddlebag" when GroupFor(sourceType) == InventoryType.SaddleBag1 => InventoryType.Inventory1,
+            "从雇员处取回" or "Retrieve from Retainer" when GroupFor(sourceType) == InventoryType.RetainerPage1 => InventoryType.Inventory1,
+            "交给雇员保管" or "Entrust to Retainer" when GroupFor(sourceType) != InventoryType.RetainerPage1 => InventoryType.RetainerPage1,
+            "放入陆行鸟鞍囊" or "Put in Saddlebag" when GroupFor(sourceType) != InventoryType.SaddleBag1 => InventoryType.SaddleBag1,
+            "放入兵装库" or "Put in Armoury Chest" or "Put in Armory Chest" when GroupFor(sourceType) == InventoryType.Inventory1 => InventoryType.ArmoryMainHand,
+            _ => null
+        };
     }
 
     private static int FindSlot(AtkUnitBase* addon, AtkResNode* eventNode)
@@ -274,28 +392,6 @@ public sealed unsafe class QuickTransfer : ModuleBase
         return -1;
     }
 
-    private static InventoryType[] TypesFor(InventoryType group) => group switch
-    {
-        InventoryType.Inventory1 => new[] { InventoryType.Inventory1, InventoryType.Inventory2, InventoryType.Inventory3, InventoryType.Inventory4 },
-        InventoryType.RetainerPage1 => new[] { InventoryType.RetainerPage1, InventoryType.RetainerPage2, InventoryType.RetainerPage3, InventoryType.RetainerPage4, InventoryType.RetainerPage5, InventoryType.RetainerPage6, InventoryType.RetainerPage7 },
-        InventoryType.SaddleBag1 => new[] { InventoryType.SaddleBag1, InventoryType.SaddleBag2, InventoryType.PremiumSaddleBag1, InventoryType.PremiumSaddleBag2 },
-        _ => ArmoryTypes
-    };
-
-    private static int FindTargetSlot(InventoryContainer* container, uint itemId, uint maxStack)
-    {
-        var firstEmpty = -1;
-        for (var i = 0; i < container->Size; i++)
-        {
-            var item = container->GetInventorySlot(i);
-            if (item == null || item->ItemId == 0)
-            {
-                if (firstEmpty < 0) firstEmpty = i;
-            }
-            else if (item->ItemId == itemId && item->Quantity < maxStack) return i;
-        }
-        return firstEmpty;
-    }
 }
 
 [Serializable]
