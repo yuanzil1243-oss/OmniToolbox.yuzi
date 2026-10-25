@@ -25,6 +25,14 @@ namespace OmniToolbox.AchievementTrackerOnline;
 public sealed unsafe class AchievementTracker : ModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true, WriteIndented = true };
+    // Offline region supplements use stable game IDs; localized names are resolved from TerritoryType.
+    // Refresh these curated entries in a module release after expansion Wiki data is complete.
+    private static readonly IReadOnlyDictionary<uint, uint[]> OfflineRegionSupplements = new Dictionary<uint, uint[]>
+    {
+        [3672] = new uint[] { 1252 },
+        [3673] = new uint[] { 1252 },
+        [3674] = new uint[] { 1252 },
+    };
     private readonly AchievementTrackerConfig config = new();
     private readonly Dictionary<uint, AchievementProgress> progress = new();
     private readonly Queue<uint> requests = new();
@@ -473,7 +481,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                         ImGui.TableSetColumnIndex(0);
                         if (ImGui.Selectable($"{candidateName}##achievement-{index}-{candidate.RowId}", goal.Id == candidate.RowId))
                         {
-                            SetAchievement(goal, candidate, index < 0 && goal.Id <= 0);
+                            SetAchievement(goal, candidate);
                             if (index >= 0)
                             {
                                 CollapseGoalCards();
@@ -709,12 +717,20 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return changed;
     }
 
-    private static void SetAchievement(AchievementGoal goal, LuminaAchievement row, bool applyRegionPreset = false)
+    private static void SetAchievement(AchievementGoal goal, LuminaAchievement row)
     {
+        var changedAchievement = goal.Id != (int)row.RowId;
+        if (changedAchievement)
+        {
+            goal.IgnoreRegion = true;
+            goal.Regions.Clear();
+            SyncLegacyRegionFields(goal);
+        }
+
         goal.Id = (int)row.RowId;
         goal.Name = row.Name.ToString();
         goal.Enabled = true;
-        if (applyRegionPreset)
+        if (changedAchievement)
             ApplyRegionPreset(goal, row);
     }
 
@@ -730,6 +746,33 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private static List<AchievementRegion> GetExplicitAchievementRegions(LuminaAchievement row)
     {
+        if (OfflineRegionSupplements.TryGetValue(row.RowId, out var territoryIds))
+        {
+            var distinctIds = territoryIds.Distinct().ToList();
+            if (distinctIds.Count is 0 or > 10) return new List<AchievementRegion>();
+
+            var territorySheet = DalamudServices.DataManager.GetExcelSheet<TerritoryType>();
+            var supplementedRegions = new List<AchievementRegion>(distinctIds.Count);
+            foreach (var territoryId in distinctIds)
+            {
+                var territoryRow = territorySheet.GetRowOrDefault(territoryId);
+                if (!territoryRow.HasValue) return new List<AchievementRegion>();
+
+                var supplementedGroup = territoryRow.Value.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "";
+                var supplementedArea = territoryRow.Value.PlaceName.ValueNullable?.Name.ToString() ?? "";
+                if (string.IsNullOrWhiteSpace(supplementedArea)) return new List<AchievementRegion>();
+
+                supplementedRegions.Add(new AchievementRegion
+                {
+                    Id = (int)territoryId,
+                    Group = supplementedGroup,
+                    Name = supplementedArea,
+                });
+            }
+
+            return supplementedRegions;
+        }
+
         // Achievement type 8 points directly to a Map row that resolves to one TerritoryType.
         if (row.Type != 8) return new List<AchievementRegion>();
 
