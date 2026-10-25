@@ -2,6 +2,16 @@
   "SchemaVersion": 1,
   "Modules": [
     {
+      "InternalName": "HideTargetCircle",
+      "Name": "隐藏目标圈",
+      "Author": "Yuzi",
+      "Description": "默认隐藏选中目标的目标圈，可在拔出武器或战斗状态下显示，并设置战斗结束后的延迟隐藏时间。",
+      "Version": "0.1.0",
+      "MinimumOmniVersion": "1.1.6.6",
+      "File": "Modules/HideTargetCircle.cs",
+      "Sha256": "C9E4A5E63837ADBC8636834B877066F63C3B121F4F695ED068B7130585D1A104"
+    },
+    {
       "InternalName": "AchievementTracker",
       "Name": "成就追踪",
       "Author": "Yuzi",
