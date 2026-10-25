@@ -38,6 +38,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private AchievementGoal draftGoal = new();
     private string lastWatchlistSnapshot = "";
     private long nextWatchlistSnapshotAt;
+    private HashSet<ushort>? pendingWatchlistBaseline;
+    private long pendingWatchlistExpiresAt;
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
 
@@ -100,6 +102,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
         requests.Clear();
         lastWatchlistSnapshot = "";
         nextWatchlistSnapshotAt = 0;
+        pendingWatchlistBaseline = null;
+        pendingWatchlistExpiresAt = 0;
     }
 
     public override bool DrawSettings()
@@ -705,7 +709,22 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
         if (achievementId == 0)
         {
-            DalamudServices.PluginLog.Warning("成就追踪：右键菜单没有唯一成就 ID 或名称匹配，未添加目标");
+            StartNativeWatchlistCapture();
+            return;
+        }
+
+        AddGoalById(achievementId);
+    }
+
+    private void AddGoalById(uint achievementId)
+    {
+        var existing = config.Goals.FirstOrDefault(goal => goal.Id == (int)achievementId);
+        if (existing != null)
+        {
+            existing.Enabled = true;
+            existing.Expanded = true;
+            SaveConfig();
+            QueueProgressRequests();
             return;
         }
 
@@ -719,7 +738,31 @@ public sealed unsafe class AchievementTracker : ModuleBase
         });
         SaveConfig();
         QueueProgressRequests();
-        LogWatchlistSnapshot("click-after");
+    }
+
+    private void StartNativeWatchlistCapture()
+    {
+        var list = AchievementListModule.Instance();
+        if (list == null)
+        {
+            DalamudServices.PluginLog.Warning("成就追踪：无法读取原生目标列表，未能开始捕获");
+            return;
+        }
+
+        var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
+        pendingWatchlistBaseline = list->WatchList[..count].ToArray().ToHashSet();
+        pendingWatchlistExpiresAt = Environment.TickCount64 + 30000;
+        DalamudServices.PluginLog.Warning(
+            $"成就追踪：已开始监听原生目标列表，基线={count}/30，等待 30 秒内新增一个成就 ID；请对同一成就执行游戏原生“加入目标列表”");
+    }
+
+    private void CompleteNativeWatchlistCapture(ushort achievementId)
+    {
+        pendingWatchlistBaseline = null;
+        pendingWatchlistExpiresAt = 0;
+        AddGoalById(achievementId);
+        DalamudServices.PluginLog.Warning(
+            $"成就追踪：从原生目标列表捕获成就 ID={achievementId}, Name={GetAchievementName(achievementId)}");
     }
 
     private static uint ResolveAchievementIdByName(string targetName, out int exactMatchCount)
@@ -818,10 +861,33 @@ public sealed unsafe class AchievementTracker : ModuleBase
         var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
         var ids = list->WatchList[..count].ToArray();
         var snapshot = $"{count}/30:[{string.Join(",", ids)}]";
-        if (snapshot == lastWatchlistSnapshot) return;
+        if (snapshot != lastWatchlistSnapshot)
+        {
+            lastWatchlistSnapshot = snapshot;
+            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表 reason={reason}, {snapshot}");
+        }
 
-        lastWatchlistSnapshot = snapshot;
-        DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表 reason={reason}, {snapshot}");
+        if (pendingWatchlistBaseline == null) return;
+        if (now > pendingWatchlistExpiresAt)
+        {
+            pendingWatchlistBaseline = null;
+            pendingWatchlistExpiresAt = 0;
+            DalamudServices.PluginLog.Warning("成就追踪：等待原生加入目标列表超时，本次捕获已取消");
+            return;
+        }
+
+        var addedIds = ids.Where(id => id != 0 && !pendingWatchlistBaseline.Contains(id)).Distinct().ToArray();
+        if (addedIds.Length == 1)
+        {
+            CompleteNativeWatchlistCapture(addedIds[0]);
+        }
+        else if (addedIds.Length > 1)
+        {
+            pendingWatchlistBaseline = null;
+            pendingWatchlistExpiresAt = 0;
+            DalamudServices.PluginLog.Warning(
+                $"成就追踪：监听期间原生目标列表新增多个 ID（{string.Join(",", addedIds)}），无法确认目标；请重新操作一次");
+        }
     }
 
     private void OnTerritoryChanged(uint territoryType) => UpdateTerritory();
