@@ -905,6 +905,10 @@ public sealed unsafe class AchievementTracker : ModuleBase
             var hasProgressResponse = progress.TryGetValue((uint)goal.Id, out var state);
             var declaredTarget = row.HasValue ? GetDeclaredAchievementTarget(row.Value) : 0;
             var hasProgressCounter = hasProgressResponse && state.Max > 0;
+            var description = row.HasValue ? row.Value.Description.ToString() : "";
+            var showCondition = row.HasValue
+                && (IsAchievementPrerequisiteDescription(description)
+                    || (hasProgressCounter && state.Max == 1));
             var completed = hasProgressCounter && state.Current >= state.Max;
             if (!goal.ShowCompleted && completed) continue;
             ImGui.Separator();
@@ -912,13 +916,19 @@ public sealed unsafe class AchievementTracker : ModuleBase
             if (!string.IsNullOrWhiteSpace(goal.Note))
                 ImGui.TextDisabled(goal.Note);
 
+            if (showCondition)
+                DrawWrappedOverlayText($"达成条件：{description}");
+
             if (!hasProgressCounter)
             {
-                if (hasProgressResponse && row.HasValue && declaredTarget == 0)
+                if (showCondition)
                 {
-                    ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
-                    ImGui.TextWrapped($"目标：{row.Value.Description}");
-                    ImGui.PopTextWrapPos();
+                    if (!hasProgressResponse)
+                        ImGui.TextDisabled("正在读取成就进度…");
+                }
+                else if (hasProgressResponse && row.HasValue && declaredTarget == 0)
+                {
+                    DrawWrappedOverlayText($"目标：{description}");
                 }
                 else
                 {
@@ -931,9 +941,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
                     }
                     else if (row.HasValue)
                     {
-                        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
-                        ImGui.TextWrapped($"目标：{row.Value.Description}");
-                        ImGui.PopTextWrapPos();
+                        DrawWrappedOverlayText($"目标：{description}");
                     }
                 }
                 continue;
@@ -944,6 +952,16 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TextColored(completed ? new System.Numerics.Vector4(0.3f, 1, 0.6f, 1) : new System.Numerics.Vector4(1, .75f, .3f, 1), completed ? "已完成" : "进行中");
         }
         ImGui.End();
+    }
+
+    private static bool IsAchievementPrerequisiteDescription(string description)
+        => description.Contains("成就", StringComparison.Ordinal);
+
+    private static void DrawWrappedOverlayText(string text)
+    {
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
+        ImGui.TextWrapped(text);
+        ImGui.PopTextWrapPos();
     }
 
     private void QueueProgressRequests()
