@@ -7,6 +7,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
@@ -35,6 +36,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly Dictionary<int, string> achievementSearch = new();
     private readonly Dictionary<int, string> territorySearch = new();
     private AchievementGoal draftGoal = new();
+    private string lastWatchlistSnapshot = "";
+    private long nextWatchlistSnapshotAt;
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
 
@@ -80,6 +83,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         QueueProgressRequests();
+        LogWatchlistSnapshot("enable");
     }
 
     protected override void OnDisable()
@@ -94,6 +98,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progressHook = null;
         progress.Clear();
         requests.Clear();
+        lastWatchlistSnapshot = "";
+        nextWatchlistSnapshotAt = 0;
     }
 
     public override bool DrawSettings()
@@ -663,14 +669,17 @@ public sealed unsafe class AchievementTracker : ModuleBase
                 return null;
 
             var openedAchievementId = module.ReadCurrentContextAchievementId();
+            var openedAchievementName = args.TargetName ?? "";
+            var nameId = ResolveAchievementIdByName(openedAchievementName, out var nameMatchCount);
             DalamudServices.PluginLog.Warning(
-                $"成就追踪诊断：创建右键菜单 Addon={args.AddonName}, Agent={(AgentAchievement.Instance() != null ? "存在" : "为空")}, ContextMenuSelectedItemId={openedAchievementId}");
+                $"成就追踪诊断：创建右键菜单 Addon={args.AddonName}, TargetName={openedAchievementName}, Agent={(AgentAchievement.Instance() != null ? "存在" : "为空")}, ContextMenuSelectedItemId={openedAchievementId}, NameResolvedId={nameId}, NameMatchCount={nameMatchCount}");
+            module.LogAchievementContextSnapshot("open");
+            module.LogWatchlistSnapshot("open");
             return new ContextMenuItem
             {
                 Name = "添加到成就追踪",
-                Prefix = "Omni",
                 Priority = 0,
-                OnClicked = _ => module.AddGoalFromContext(openedAchievementId),
+                OnClicked = _ => module.AddGoalFromContext(openedAchievementId, openedAchievementName),
             };
         }
     }
@@ -681,16 +690,22 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return agent == null ? 0 : agent->ContextMenuSelectedItemId;
     }
 
-    private void AddGoalFromContext(uint openedAchievementId)
+    private void AddGoalFromContext(uint openedAchievementId, string openedAchievementName)
     {
         var currentContextId = ReadCurrentContextAchievementId();
         var achievementId = openedAchievementId != 0 ? openedAchievementId : currentContextId;
+        var nameId = ResolveAchievementIdByName(openedAchievementName, out var nameMatchCount);
+        if (achievementId == 0 && nameId != 0)
+            achievementId = nameId;
+
+        LogAchievementContextSnapshot("click");
+        LogWatchlistSnapshot("click-before");
         DalamudServices.PluginLog.Warning(
-            $"成就追踪诊断：点击添加 openedId={openedAchievementId}, currentId={currentContextId}, resolvedId={achievementId}");
+            $"成就追踪诊断：点击添加 openedId={openedAchievementId}, currentId={currentContextId}, TargetName={openedAchievementName}, nameId={nameId}, nameMatchCount={nameMatchCount}, resolvedId={achievementId}");
 
         if (achievementId == 0)
         {
-            DalamudServices.PluginLog.Warning("成就追踪：右键菜单没有提供成就 ID，未添加目标，避免将玩家名误识别为成就");
+            DalamudServices.PluginLog.Warning("成就追踪：右键菜单没有唯一成就 ID 或名称匹配，未添加目标");
             return;
         }
 
@@ -704,23 +719,25 @@ public sealed unsafe class AchievementTracker : ModuleBase
         });
         SaveConfig();
         QueueProgressRequests();
+        LogWatchlistSnapshot("click-after");
     }
 
-    private static uint ResolveAchievementIdByName(string targetName)
+    private static uint ResolveAchievementIdByName(string targetName, out int exactMatchCount)
     {
         var sheet = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>();
         var normalizedTarget = NormalizeAchievementText(targetName);
-        if (string.IsNullOrWhiteSpace(normalizedTarget)) return 0;
+        if (string.IsNullOrWhiteSpace(normalizedTarget))
+        {
+            exactMatchCount = 0;
+            return 0;
+        }
+
         var exactMatches = sheet
             .Where(row => NormalizeAchievementText(row.Name.ToString()) == normalizedTarget)
             .Select(row => row.RowId)
             .ToArray();
-        if (exactMatches.Length > 0)
-            return exactMatches[0];
-
-        var partialMatch = sheet.FirstOrDefault(row =>
-            NormalizeAchievementText(row.Name.ToString()).Contains(normalizedTarget, StringComparison.Ordinal));
-        return partialMatch.RowId;
+        exactMatchCount = exactMatches.Length;
+        return exactMatches.Length == 1 ? exactMatches[0] : 0;
     }
 
     private static string NormalizeAchievementText(string value)
@@ -736,6 +753,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void OnFrameworkUpdate(IFramework framework)
     {
+        LogWatchlistSnapshot("framework");
         var achievement = FfxivAchievement.Instance();
         if (achievement != null && achievement->ProgressAchievementId != 0
             && achievement->ProgressRequestState == FfxivAchievement.AchievementState.Loaded)
@@ -752,6 +770,58 @@ public sealed unsafe class AchievementTracker : ModuleBase
     {
         progressHook!.Original(achievement, id, current, max);
         progress[id] = new(current, max);
+    }
+
+    private unsafe void LogAchievementContextSnapshot(string reason)
+    {
+        var context = AgentContext.Instance();
+        var menu = context == null ? null : context->CurrentContextMenu;
+        if (menu == null)
+        {
+            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生右键快照 reason={reason}, CurrentContextMenu=null");
+            return;
+        }
+
+        var entries = new List<string>();
+        for (var i = 0; i < menu->EventIds.Length; i++)
+        {
+            var handler = menu->EventHandlers[i].Value;
+            var eventId = menu->EventIds[i];
+            var handlerParam = menu->EventHandlerParams[i];
+            if (eventId == 0 && handler == null && handlerParam == 0) continue;
+            var handlerAddress = (nint)handler;
+            entries.Add($"{i}:{eventId}/{handlerParam}/0x{handlerAddress:X}");
+        }
+
+        DalamudServices.PluginLog.Warning(
+            $"成就追踪诊断：原生右键快照 reason={reason}, CurrentEventIndex={menu->CurrentEventIndex}, CurrentEventId={menu->CurrentEventId}, SelectedContextItemIndex={menu->SelectedContextItemIndex}, Events=[{string.Join(",", entries)}]");
+    }
+
+    private unsafe void LogWatchlistSnapshot(string reason)
+    {
+        var now = Environment.TickCount64;
+        if (reason == "framework")
+        {
+            if (now < nextWatchlistSnapshotAt) return;
+            nextWatchlistSnapshotAt = now + 1000;
+        }
+
+        var list = AchievementListModule.Instance();
+        if (list == null)
+        {
+            if (lastWatchlistSnapshot == "unavailable") return;
+            lastWatchlistSnapshot = "unavailable";
+            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表不可用 reason={reason}, AchievementListModule=null");
+            return;
+        }
+
+        var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
+        var ids = list->WatchList[..count].ToArray();
+        var snapshot = $"{count}/30:[{string.Join(",", ids)}]";
+        if (snapshot == lastWatchlistSnapshot) return;
+
+        lastWatchlistSnapshot = snapshot;
+        DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表 reason={reason}, {snapshot}");
     }
 
     private void OnTerritoryChanged(uint territoryType) => UpdateTerritory();
