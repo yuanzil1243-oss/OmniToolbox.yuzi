@@ -5,11 +5,11 @@
       "InternalName": "AchievementTracker",
       "Name": "成就追踪",
       "Author": "Yuzi",
-      "Description": "读取游戏原生成就进度并显示不限数量的目标，支持按原生 ID 或名称识别、多地区筛选、右键添加和本地保存。",
-      "Version": "0.5.5",
+      "Description": "读取游戏原生成就进度并显示不限数量的目标，自动同步原生目标列表并按角色保存，支持多地区筛选和手动搜索添加。",
+      "Version": "0.5.6",
       "MinimumOmniVersion": "1.1.6.6",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "DF2388523D7F97CE84FD2317C87EBCE231C2D3594A37C328D9F6D7358707674D"
+      "Sha256": "82C23780B8C0045FF805484EBE2A81B6ACA2D4C0516E0B9A7AD5D31F26D82AB3"
     },
     {
       "InternalName": "SellOnClick",

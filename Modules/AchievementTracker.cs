@@ -6,13 +6,10 @@ using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
 using OmenTools;
 using OmenTools.Info.Game.Enums;
-using OmenTools.OmenService;
-using OmenTools.OmenService.Abstractions;
 using OmenTools.Extensions;
 using FfxivAchievement = FFXIVClientStructs.FFXIV.Client.Game.UI.Achievement;
 using LuminaAchievement = Lumina.Excel.Sheets.Achievement;
@@ -30,23 +27,23 @@ public sealed unsafe class AchievementTracker : ModuleBase
     private readonly Dictionary<uint, AchievementProgress> progress = new();
     private readonly Queue<uint> requests = new();
     private Dalamud.Hooking.Hook<ReceiveAchievementProgressDelegate>? progressHook;
-    private AchievementContextMenuEntry? contextMenuEntry;
+    private Dalamud.Hooking.Hook<AchievementListModule.Delegates.AddToWatchlist>? addToWatchlistHook;
     private string currentRegion = "";
     private uint currentTerritoryId;
     private readonly Dictionary<int, string> achievementSearch = new();
     private readonly Dictionary<int, string> territorySearch = new();
     private AchievementGoal draftGoal = new();
-    private string lastWatchlistSnapshot = "";
-    private long nextWatchlistSnapshotAt;
-    private HashSet<ushort>? pendingWatchlistBaseline;
-    private long pendingWatchlistExpiresAt;
+    private ulong activeContentId;
+    private bool nativeWatchlistImported;
+    private long nativeWatchlistImportAfter;
+    private bool legacyMigrationPending;
+    private readonly HashSet<ushort> pendingNativeAdds = new();
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
-
     public override ModuleInfo Info { get; } = new()
     {
         Title = "成就追踪", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，支持按原生 ID 或名称识别和地区筛选。",
+        Description = "读取游戏原生成就进度并在游戏内显示不限数量的目标，自动同步原生目标列表并按角色保存。",
         Commands = new[]
         {
             new ModuleCommand("显示或隐藏成就追踪窗口", "achievement"),
@@ -67,6 +64,8 @@ public sealed unsafe class AchievementTracker : ModuleBase
         if (!string.Equals(name, "achievement", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        EnsureCharacterProfile();
+        if (activeContentId == 0) return false;
         config.ShowOverlay = !config.ShowOverlay;
         SaveConfig();
         return true;
@@ -74,18 +73,17 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     protected override void OnEnable()
     {
-        LoadConfig();
         progressHook = DService.Instance().Hook.HookFromMemberFunction<ReceiveAchievementProgressDelegate>(
             typeof(FfxivAchievement.MemberFunctionPointers), "ReceiveAchievementProgress", ReceiveAchievementProgress);
         progressHook.Enable();
+        addToWatchlistHook = DService.Instance().Hook.HookFromMemberFunction<AchievementListModule.Delegates.AddToWatchlist>(
+            typeof(AchievementListModule.MemberFunctionPointers), "AddToWatchlist", AddToWatchlist);
+        addToWatchlistHook.Enable();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged += OnTerritoryChanged;
-        contextMenuEntry = new AchievementContextMenuEntry(this);
-        OmenServiceBase<ContextMenuManager>.Instance().Reg(contextMenuEntry);
         DalamudServices.PluginInterface.UiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
-        QueueProgressRequests();
-        LogWatchlistSnapshot("enable");
+        EnsureCharacterProfile();
     }
 
     protected override void OnDisable()
@@ -93,21 +91,27 @@ public sealed unsafe class AchievementTracker : ModuleBase
         DalamudServices.PluginInterface.UiBuilder.Draw -= DrawOverlay;
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         DService.Instance().ClientState.TerritoryChanged -= OnTerritoryChanged;
-        if (contextMenuEntry != null)
-            OmenServiceBase<ContextMenuManager>.Instance().Unreg(contextMenuEntry);
-        contextMenuEntry = null;
+        SaveConfig();
         progressHook?.Dispose();
         progressHook = null;
+        addToWatchlistHook?.Dispose();
+        addToWatchlistHook = null;
         progress.Clear();
         requests.Clear();
-        lastWatchlistSnapshot = "";
-        nextWatchlistSnapshotAt = 0;
-        pendingWatchlistBaseline = null;
-        pendingWatchlistExpiresAt = 0;
+        activeContentId = 0;
+        nativeWatchlistImported = false;
+        pendingNativeAdds.Clear();
     }
 
     public override bool DrawSettings()
     {
+        EnsureCharacterProfile();
+        if (activeContentId == 0)
+        {
+            ImGui.TextDisabled("角色信息加载中…");
+            return false;
+        }
+
         var changed = false;
         var controlHeight = ImGui.GetFrameHeight();
 
@@ -125,63 +129,62 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.TableNextRow();
             ImGui.TableSetColumnIndex(0);
             ImGui.TextDisabled("成就名称");
-            changed |= DrawAchievementPicker(-1, draftGoal);
+            changed |= DrawAchievementPicker(-1, draftGoal, false);
 
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            ImGui.TextDisabled("达成条件与进度");
-            DrawAchievementProgress(draftGoal);
-
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            changed |= DrawTerritoryPicker(-1, draftGoal);
-
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            ImGui.TextDisabled("备注");
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(-1);
-            changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
-
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            changed |= ImGui.Checkbox("完成后仍显示", ref draftGoal.ShowCompleted);
-
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-            var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
-            if (ImGui.Button("保存目标", new System.Numerics.Vector2(actionWidth, controlHeight)) && draftGoal.Id > 0)
+            if (draftGoal.Id > 0)
             {
-                config.Goals.Add(new AchievementGoal
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                ImGui.TextDisabled("达成条件与进度");
+                DrawAchievementProgress(draftGoal);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                changed |= DrawTerritoryPicker(-1, draftGoal);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                ImGui.TextDisabled("备注");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(-1);
+                changed |= ImGui.InputText("##draft-note", ref draftGoal.Note, 128);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                changed |= ImGui.Checkbox("完成后仍显示", ref draftGoal.ShowCompleted);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                var actionWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X) * 0.5f;
+                if (ImGui.Button("保存目标", new System.Numerics.Vector2(actionWidth, controlHeight)))
                 {
-                    Id = draftGoal.Id,
-                    Name = draftGoal.Name,
-                    Region = draftGoal.Region,
-                    RegionGroup = draftGoal.RegionGroup,
-                    RegionId = draftGoal.RegionId,
-                    Note = draftGoal.Note,
-                    Enabled = draftGoal.Enabled,
-                    IgnoreRegion = draftGoal.IgnoreRegion,
-                    ShowCompleted = draftGoal.ShowCompleted,
-                    Regions = draftGoal.Regions.Select(x => x.Clone()).ToList(),
-                    Expanded = true,
-                });
-                draftGoal = new AchievementGoal();
-                achievementSearch.Remove(-1);
-                territorySearch.Remove(-1);
-                changed = true;
-            }
-            ImGui.SameLine();
-            if (ImGui.Button("清空编辑", new System.Numerics.Vector2(actionWidth, controlHeight)))
-            {
-                draftGoal = new AchievementGoal();
-                achievementSearch.Remove(-1);
-                territorySearch.Remove(-1);
-                changed = true;
-            }
-            if (draftGoal.Id <= 0)
-            {
-                ImGui.TextDisabled("请先选择一个成就再保存");
+                    config.Goals.Add(new AchievementGoal
+                    {
+                        Id = draftGoal.Id,
+                        Name = draftGoal.Name,
+                        Region = draftGoal.Region,
+                        RegionGroup = draftGoal.RegionGroup,
+                        RegionId = draftGoal.RegionId,
+                        Note = draftGoal.Note,
+                        Enabled = draftGoal.Enabled,
+                        IgnoreRegion = draftGoal.IgnoreRegion,
+                        ShowCompleted = draftGoal.ShowCompleted,
+                        Regions = draftGoal.Regions.Select(x => x.Clone()).ToList(),
+                        Expanded = true,
+                    });
+                    draftGoal = new AchievementGoal();
+                    achievementSearch.Remove(-1);
+                    territorySearch.Remove(-1);
+                    changed = true;
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("清空编辑", new System.Numerics.Vector2(actionWidth, controlHeight)))
+                {
+                    draftGoal = new AchievementGoal();
+                    achievementSearch.Remove(-1);
+                    territorySearch.Remove(-1);
+                    changed = true;
+                }
             }
             ImGui.EndTable();
         }
@@ -268,7 +271,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
             ImGui.PopID();
         }
         if (config.Goals.Count == 0)
-            ImGui.TextDisabled("暂无目标。可以在游戏成就界面右键添加。");
+            ImGui.TextDisabled("暂无目标。可使用上方搜索添加，或加入游戏原生目标列表后自动同步。");
 
         if (ImGui.BeginTable("##display-options", 2,
                 ImGuiTableFlags.BordersOuter | ImGuiTableFlags.BordersInnerV
@@ -305,7 +308,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
         return changed;
     }
 
-    private bool DrawAchievementPicker(int index, AchievementGoal goal)
+    private bool DrawAchievementPicker(int index, AchievementGoal goal, bool showMetadata = true)
     {
         var changed = false;
         var popupId = $"AchievementPicker-{index}";
@@ -318,18 +321,22 @@ public sealed unsafe class AchievementTracker : ModuleBase
         if (string.IsNullOrWhiteSpace(name)) name = "选择成就…";
 
         if (ImGui.Button($"{name}##achievement-picker", new System.Numerics.Vector2(-1, 0)))
+        {
+            query = "";
+            achievementSearch[index] = query;
             ImGui.OpenPopup(popupId);
-        if (row.HasValue)
+        }
+        if (showMetadata && row.HasValue)
         {
             ImGui.TextDisabled($"ID: {row.Value.RowId}");
             ImGui.SameLine();
             ImGui.TextDisabled($"分类: {GetAchievementCategory(row.Value)}");
         }
-        else if (goal.Id > 0)
+        else if (showMetadata && goal.Id > 0)
         {
             ImGui.TextDisabled($"无效成就 ID: {goal.Id}");
         }
-        else if (!string.IsNullOrWhiteSpace(goal.Name))
+        else if (showMetadata && !string.IsNullOrWhiteSpace(goal.Name))
         {
             ImGui.TextDisabled("待匹配名称，可在上方搜索框重新选择");
         }
@@ -612,7 +619,7 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void DrawOverlay()
     {
-        if (!config.ShowOverlay) return;
+        if (activeContentId == 0 || !config.ShowOverlay) return;
         ImGui.SetNextWindowBgAlpha(config.Opacity);
         var flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize;
         if (!ImGui.Begin("##AchievementTrackerOverlay", flags)) { ImGui.End(); return; }
@@ -658,71 +665,28 @@ public sealed unsafe class AchievementTracker : ModuleBase
             requests.Enqueue(id);
     }
 
-    private sealed class AchievementContextMenuEntry(AchievementTracker module) : ContextMenuEntry
+    private bool AddToWatchlist(AchievementListModule* list, ushort achievementId)
     {
-        public override string Identifier => "AchievementTracker";
-
-        public unsafe override ContextMenuItem? Create(ContextMenuOpenedArgs args)
+        var result = addToWatchlistHook!.Original(list, achievementId);
+        var isOnWatchlist = result;
+        if (!isOnWatchlist && list != null)
         {
-            DalamudServices.PluginLog.Warning($"成就追踪诊断：收到右键菜单 Addon={args.AddonName ?? "<null>"}");
-            // 成就列表、详情和分类页使用的原生窗口名可能不同（例如
-            // AchievementDetail）。OmenTools 只在标准 AgentContext 菜单
-            // 打开时调用这里，因此按 Achievement 前缀识别成就窗口。
-            if (string.IsNullOrWhiteSpace(args.AddonName)
-                || !args.AddonName.StartsWith("Achievement", StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            var openedAchievementId = module.ReadCurrentContextAchievementId();
-            var openedAchievementName = args.TargetName ?? "";
-            var nameId = ResolveAchievementIdByName(openedAchievementName, out var nameMatchCount);
-            DalamudServices.PluginLog.Warning(
-                $"成就追踪诊断：创建右键菜单 Addon={args.AddonName}, TargetName={openedAchievementName}, Agent={(AgentAchievement.Instance() != null ? "存在" : "为空")}, ContextMenuSelectedItemId={openedAchievementId}, NameResolvedId={nameId}, NameMatchCount={nameMatchCount}");
-            module.LogAchievementContextSnapshot("open");
-            module.LogWatchlistSnapshot("open");
-            return new ContextMenuItem
-            {
-                Name = "添加到成就追踪",
-                Priority = 0,
-                OnClicked = _ => module.AddGoalFromContext(openedAchievementId, openedAchievementName),
-            };
+            var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
+            isOnWatchlist = list->WatchList[..count].Contains(achievementId);
         }
+        if (isOnWatchlist && activeContentId != 0 && list != null && list->CharacterContentId == activeContentId)
+            pendingNativeAdds.Add(achievementId);
+        return result;
     }
 
-    private unsafe uint ReadCurrentContextAchievementId()
+    private void AddGoalById(uint achievementId, bool expanded)
     {
-        var agent = AgentAchievement.Instance();
-        return agent == null ? 0 : agent->ContextMenuSelectedItemId;
-    }
-
-    private void AddGoalFromContext(uint openedAchievementId, string openedAchievementName)
-    {
-        var currentContextId = ReadCurrentContextAchievementId();
-        var achievementId = openedAchievementId != 0 ? openedAchievementId : currentContextId;
-        var nameId = ResolveAchievementIdByName(openedAchievementName, out var nameMatchCount);
-        if (achievementId == 0 && nameId != 0)
-            achievementId = nameId;
-
-        LogAchievementContextSnapshot("click");
-        LogWatchlistSnapshot("click-before");
-        DalamudServices.PluginLog.Warning(
-            $"成就追踪诊断：点击添加 openedId={openedAchievementId}, currentId={currentContextId}, TargetName={openedAchievementName}, nameId={nameId}, nameMatchCount={nameMatchCount}, resolvedId={achievementId}");
-
-        if (achievementId == 0)
-        {
-            StartNativeWatchlistCapture();
-            return;
-        }
-
-        AddGoalById(achievementId);
-    }
-
-    private void AddGoalById(uint achievementId)
-    {
+        if (achievementId == 0 || activeContentId == 0) return;
         var existing = config.Goals.FirstOrDefault(goal => goal.Id == (int)achievementId);
         if (existing != null)
         {
             existing.Enabled = true;
-            existing.Expanded = true;
+            existing.Expanded = expanded;
             SaveConfig();
             QueueProgressRequests();
             return;
@@ -735,57 +699,43 @@ public sealed unsafe class AchievementTracker : ModuleBase
             Enabled = true,
             IgnoreRegion = true,
             Region = "",
+            Expanded = expanded,
         });
         SaveConfig();
         QueueProgressRequests();
     }
 
-    private void StartNativeWatchlistCapture()
+    private unsafe void ImportNativeWatchlist()
     {
         var list = AchievementListModule.Instance();
-        if (list == null)
-        {
-            DalamudServices.PluginLog.Warning("成就追踪：无法读取原生目标列表，未能开始捕获");
-            return;
-        }
+        if (list == null || list->CharacterContentId != activeContentId) return;
 
         var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
-        pendingWatchlistBaseline = list->WatchList[..count].ToArray().ToHashSet();
-        pendingWatchlistExpiresAt = Environment.TickCount64 + 30000;
-        DalamudServices.PluginLog.Warning(
-            $"成就追踪：已开始监听原生目标列表，基线={count}/30，等待 30 秒内新增一个成就 ID；请对同一成就执行游戏原生“加入目标列表”");
-    }
-
-    private void CompleteNativeWatchlistCapture(ushort achievementId)
-    {
-        pendingWatchlistBaseline = null;
-        pendingWatchlistExpiresAt = 0;
-        AddGoalById(achievementId);
-        DalamudServices.PluginLog.Warning(
-            $"成就追踪：从原生目标列表捕获成就 ID={achievementId}, Name={GetAchievementName(achievementId)}");
-    }
-
-    private static uint ResolveAchievementIdByName(string targetName, out int exactMatchCount)
-    {
-        var sheet = DalamudServices.DataManager.GetExcelSheet<LuminaAchievement>();
-        var normalizedTarget = NormalizeAchievementText(targetName);
-        if (string.IsNullOrWhiteSpace(normalizedTarget))
+        var existingIds = config.Goals.Select(goal => (uint)goal.Id).ToHashSet();
+        var imported = 0;
+        for (var i = 0; i < count; i++)
         {
-            exactMatchCount = 0;
-            return 0;
+            var achievementId = list->WatchList[i];
+            if (achievementId == 0 || !existingIds.Add(achievementId)) continue;
+            config.Goals.Add(new AchievementGoal
+            {
+                Id = achievementId,
+                Name = GetAchievementName(achievementId),
+                Enabled = true,
+                IgnoreRegion = true,
+                Expanded = false,
+            });
+            imported++;
         }
 
-        var exactMatches = sheet
-            .Where(row => NormalizeAchievementText(row.Name.ToString()) == normalizedTarget)
-            .Select(row => row.RowId)
-            .ToArray();
-        exactMatchCount = exactMatches.Length;
-        return exactMatches.Length == 1 ? exactMatches[0] : 0;
-    }
-
-    private static string NormalizeAchievementText(string value)
-    {
-        return new string(value.Where(c => !char.IsWhiteSpace(c) && !char.IsPunctuation(c)).ToArray());
+        nativeWatchlistImported = true;
+        if (imported > 0)
+        {
+            SaveConfig();
+            QueueProgressRequests();
+        }
+        DalamudServices.PluginLog.Information(
+            $"成就追踪：角色目标列表初始化完成，角色={activeContentId:X16}, 原生目标={count}, 新同步={imported}");
     }
 
     private static string GetAchievementName(uint achievementId)
@@ -796,7 +746,21 @@ public sealed unsafe class AchievementTracker : ModuleBase
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        LogWatchlistSnapshot("framework");
+        EnsureCharacterProfile();
+        if (activeContentId != 0 && !nativeWatchlistImported && Environment.TickCount64 >= nativeWatchlistImportAfter)
+            ImportNativeWatchlist();
+
+        if (pendingNativeAdds.Count > 0)
+        {
+            foreach (var achievementId in pendingNativeAdds.ToArray())
+            {
+                AddGoalById(achievementId, expanded: true);
+                DalamudServices.PluginLog.Information(
+                    $"成就追踪：原生加入目标列表已触发，角色={activeContentId:X16}, 成就ID={achievementId}");
+            }
+            pendingNativeAdds.Clear();
+        }
+
         var achievement = FfxivAchievement.Instance();
         if (achievement != null && achievement->ProgressAchievementId != 0
             && achievement->ProgressRequestState == FfxivAchievement.AchievementState.Loaded)
@@ -815,81 +779,6 @@ public sealed unsafe class AchievementTracker : ModuleBase
         progress[id] = new(current, max);
     }
 
-    private unsafe void LogAchievementContextSnapshot(string reason)
-    {
-        var context = AgentContext.Instance();
-        var menu = context == null ? null : context->CurrentContextMenu;
-        if (menu == null)
-        {
-            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生右键快照 reason={reason}, CurrentContextMenu=null");
-            return;
-        }
-
-        var entries = new List<string>();
-        for (var i = 0; i < menu->EventIds.Length; i++)
-        {
-            var handler = menu->EventHandlers[i].Value;
-            var eventId = menu->EventIds[i];
-            var handlerParam = menu->EventHandlerParams[i];
-            if (eventId == 0 && handler == null && handlerParam == 0) continue;
-            var handlerAddress = (nint)handler;
-            entries.Add($"{i}:{eventId}/{handlerParam}/0x{handlerAddress:X}");
-        }
-
-        DalamudServices.PluginLog.Warning(
-            $"成就追踪诊断：原生右键快照 reason={reason}, CurrentEventIndex={menu->CurrentEventIndex}, CurrentEventId={menu->CurrentEventId}, SelectedContextItemIndex={menu->SelectedContextItemIndex}, Events=[{string.Join(",", entries)}]");
-    }
-
-    private unsafe void LogWatchlistSnapshot(string reason)
-    {
-        var now = Environment.TickCount64;
-        if (reason == "framework")
-        {
-            if (now < nextWatchlistSnapshotAt) return;
-            nextWatchlistSnapshotAt = now + 1000;
-        }
-
-        var list = AchievementListModule.Instance();
-        if (list == null)
-        {
-            if (lastWatchlistSnapshot == "unavailable") return;
-            lastWatchlistSnapshot = "unavailable";
-            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表不可用 reason={reason}, AchievementListModule=null");
-            return;
-        }
-
-        var count = Math.Min((int)list->WatchlistCount, list->WatchList.Length);
-        var ids = list->WatchList[..count].ToArray();
-        var snapshot = $"{count}/30:[{string.Join(",", ids)}]";
-        if (snapshot != lastWatchlistSnapshot)
-        {
-            lastWatchlistSnapshot = snapshot;
-            DalamudServices.PluginLog.Warning($"成就追踪诊断：原生目标列表 reason={reason}, {snapshot}");
-        }
-
-        if (pendingWatchlistBaseline == null) return;
-        if (now > pendingWatchlistExpiresAt)
-        {
-            pendingWatchlistBaseline = null;
-            pendingWatchlistExpiresAt = 0;
-            DalamudServices.PluginLog.Warning("成就追踪：等待原生加入目标列表超时，本次捕获已取消");
-            return;
-        }
-
-        var addedIds = ids.Where(id => id != 0 && !pendingWatchlistBaseline.Contains(id)).Distinct().ToArray();
-        if (addedIds.Length == 1)
-        {
-            CompleteNativeWatchlistCapture(addedIds[0]);
-        }
-        else if (addedIds.Length > 1)
-        {
-            pendingWatchlistBaseline = null;
-            pendingWatchlistExpiresAt = 0;
-            DalamudServices.PluginLog.Warning(
-                $"成就追踪：监听期间原生目标列表新增多个 ID（{string.Join(",", addedIds)}），无法确认目标；请重新操作一次");
-        }
-    }
-
     private void OnTerritoryChanged(uint territoryType) => UpdateTerritory();
 
     private void UpdateTerritory()
@@ -899,28 +788,89 @@ public sealed unsafe class AchievementTracker : ModuleBase
         currentRegion = row.HasValue ? row.Value.PlaceName.ValueNullable?.Name.ToString() ?? "" : "";
     }
 
-    private static string ConfigPath => Path.Combine(DalamudServices.PluginInterface.GetPluginConfigDirectory(), "AchievementTracker.json");
+    private static string ConfigDirectory => DalamudServices.PluginInterface.GetPluginConfigDirectory();
+    private static string LegacyConfigPath => Path.Combine(ConfigDirectory, "AchievementTracker.json");
+    private static string LegacyMigrationMarkerPath => Path.Combine(ConfigDirectory, "AchievementTracker.legacy-migrated");
+    private string ProfileConfigPath => Path.Combine(ConfigDirectory, $"AchievementTracker-{activeContentId:X16}.json");
 
-    private void LoadConfig()
+    private void EnsureCharacterProfile()
+    {
+        var clientState = DService.Instance().ClientState;
+        var playerState = DService.Instance().PlayerState;
+        var contentId = clientState.IsLoggedIn && playerState.IsLoaded ? playerState.ContentId : 0;
+        if (contentId == activeContentId) return;
+
+        SaveConfig();
+        activeContentId = 0;
+        ResetCharacterConfig();
+        progress.Clear();
+        requests.Clear();
+        achievementSearch.Clear();
+        territorySearch.Clear();
+        draftGoal = new AchievementGoal();
+        pendingNativeAdds.Clear();
+        nativeWatchlistImported = false;
+        nativeWatchlistImportAfter = 0;
+        legacyMigrationPending = false;
+
+        if (contentId == 0) return;
+
+        activeContentId = contentId;
+        if (File.Exists(ProfileConfigPath))
+        {
+            LoadConfigFile(ProfileConfigPath);
+        }
+        else if (!File.Exists(LegacyMigrationMarkerPath) && File.Exists(LegacyConfigPath))
+        {
+            LoadConfigFile(LegacyConfigPath);
+            legacyMigrationPending = true;
+            SaveConfig();
+        }
+
+        nativeWatchlistImportAfter = Environment.TickCount64 + 2000;
+        QueueProgressRequests();
+    }
+
+    private void LoadConfigFile(string path)
     {
         try
         {
-            if (!File.Exists(ConfigPath)) return;
-            var saved = JsonSerializer.Deserialize<AchievementTrackerConfig>(File.ReadAllText(ConfigPath), JsonOptions);
+            var saved = JsonSerializer.Deserialize<AchievementTrackerConfig>(File.ReadAllText(path), JsonOptions);
             if (saved == null) return;
-            config.ShowOverlay = saved.ShowOverlay; config.ShowCompleted = saved.ShowCompleted; config.Opacity = saved.Opacity;
-            config.Goals.Clear(); config.Goals.AddRange(saved.Goals);
-            config.Goals.RemoveAll(x => x == null || (x.Id <= 0 && string.IsNullOrWhiteSpace(x.Name)));
+            config.ShowOverlay = saved.ShowOverlay;
+            config.ShowCompleted = saved.ShowCompleted;
+            config.Opacity = saved.Opacity;
+            config.Goals.Clear();
+            config.Goals.AddRange(saved.Goals ?? new List<AchievementGoal>());
+            config.Goals.RemoveAll(goal => goal == null || (goal.Id <= 0 && string.IsNullOrWhiteSpace(goal.Name)));
             foreach (var goal in config.Goals)
                 MigrateLegacyRegion(goal);
         }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取成就追踪配置失败"); }
+        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, $"读取成就追踪配置失败: {path}"); }
+    }
+
+    private void ResetCharacterConfig()
+    {
+        config.Goals.Clear();
+        config.ShowOverlay = true;
+        config.ShowCompleted = true;
+        config.Opacity = 0.92f;
     }
 
     private void SaveConfig()
     {
-        try { Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!); File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, JsonOptions)); }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存成就追踪配置失败"); }
+        if (activeContentId == 0) return;
+        try
+        {
+            Directory.CreateDirectory(ConfigDirectory);
+            File.WriteAllText(ProfileConfigPath, JsonSerializer.Serialize(config, JsonOptions));
+            if (legacyMigrationPending)
+            {
+                File.WriteAllText(LegacyMigrationMarkerPath, activeContentId.ToString());
+                legacyMigrationPending = false;
+            }
+        }
+        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存成就追踪角色配置失败"); }
     }
 }
 
