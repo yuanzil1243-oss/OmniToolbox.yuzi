@@ -32,6 +32,16 @@
       "Sha256": "13457B1543FDADD34E75E19BF70B10FACF61DEC80AD5F0F0C3E49970CDB77A0C"
     },
     {
+      "InternalName": "QuickTransfer",
+      "Name": "快捷转移",
+      "Author": "Yuzi",
+      "Description": "按住修饰键左键单击物品，将其移动到另一已打开的物品栏、雇员物品栏、陆行鸟包或兵装库。",
+      "Version": "0.1.0",
+      "MinimumOmniVersion": "1.1.6.6",
+      "File": "Modules/QuickTransfer.cs",
+      "Sha256": "5977DDA8A58966126ECB484A762AE8D690FE4D31E84DB5EAD3D2566274D3C778"
+    },
+    {
       "InternalName": "LimitBreakAdjustments",
       "Name": "极限技调整",
       "Author": "Yuzi",
