@@ -47,7 +47,7 @@
       "Author": "Yuzi",
       "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。",
       "Version": "0.2.0",
-      "MinimumOmniVersion": "1.1.8.2",
+      "MinimumOmniVersion": "1.1.8.1",
       "File": "Modules/KeyRepeater.cs",
       "Sha256": "A42288B0AA660674F94CA5A2B1B5C38422C5E8703B997233F7E930D95A8AD0DB"
     }
