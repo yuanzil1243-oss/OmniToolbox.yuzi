@@ -20,7 +20,6 @@ using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
 using OmniToolbox.UI;
-using OmniToolbox.Lifecycle;
 using TreeTools.Lifecycle;
 
 namespace OmniToolbox.SellOnClickOnline;

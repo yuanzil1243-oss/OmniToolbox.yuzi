@@ -15,10 +15,13 @@ using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
+using OmniToolbox.UI;
+using TreeTools.Lifecycle;
 
 namespace OmniToolbox.KeyRepeaterOnline;
 
-public sealed unsafe class KeyRepeater : ModuleBase
+[ModuleApiVersion(1)]
+public sealed unsafe class KeyRepeater : OmniModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly Dictionary<int, long> due = new();
@@ -32,8 +35,12 @@ public sealed unsafe class KeyRepeater : ModuleBase
     {
         Author = "Yuzi", Category = ModuleCategory.Item
     };
+    public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
+    {
+        ["Title"] = "按键连点", ["Description"] = "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。"
+    });
     public override bool HasSettings => true;
-    protected override void OnEnable()
+    protected override void OnStart(FeatureLifetime activation)
     {
         try
         {
@@ -45,7 +52,7 @@ public sealed unsafe class KeyRepeater : ModuleBase
         refreshAt = 0;
         DalamudServices.Framework.Update += OnUpdate;
     }
-    protected override void OnDisable()
+    protected override void OnStop()
     {
         DalamudServices.Framework.Update -= OnUpdate;
         due.Clear(); bindings.Clear(); running = 0; status = "已停用";
