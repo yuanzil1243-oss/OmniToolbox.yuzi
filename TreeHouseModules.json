@@ -53,7 +53,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/KeyRepeater.cs",
-      "Sha256": "C93C6A81DC308B145DF59D13E43A6AD8FD8544B2660CDFBC38045A5E47B69ED4",
+      "Sha256": "DE88835D45885B16EE2388E2822DB30D29CA116FA58DA3EEB109AD5ADF944A30",
       "Localization": { "Source": { "Title": "按键连点", "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。" } }
     }
   ]
