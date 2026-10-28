@@ -18,7 +18,7 @@ namespace OmniToolbox.LimitBreakAdjustmentsOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 {
-    private readonly Settings config = new();
+    private Settings config = new();
     private bool preview;
     private byte previewFrames;
     private byte previousBarCount;
@@ -45,7 +45,7 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
             LimitBreakController.Instance()->BarCount = previousBarCount;
         previewFrames = 0;
         preview = false;
-        Apply(Settings.Default);
+        Apply(new Settings());
     }
 
     public override bool DrawSettings()
@@ -101,14 +101,13 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
             position += value.BarSpacing;
         }
     }
-}
 
-[Serializable]
-public sealed class Settings
-{
-    public static readonly Settings Default = new();
-    public float BarRotation;
-    public Vector2 BarSpacing = new(164, 0);
-    public Vector2 TextPosition = new(12, 1);
-    public bool HideText;
+    [Serializable]
+    private sealed class Settings
+    {
+        public float BarRotation;
+        public Vector2 BarSpacing = new(164, 0);
+        public Vector2 TextPosition = new(12, 1);
+        public bool HideText;
+    }
 }

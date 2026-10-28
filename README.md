@@ -2,6 +2,17 @@
 
 Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 
+当前正式清单使用 `OmniToolbox-Yuzi-Local-Omni1.1.8.5-20261028` 修复包提供的四个 DLL，最低宿主为 Omni **1.1.8.5**：
+
+| 模块 | 发布文件 | 版本 |
+| --- | --- | --- |
+| 隐藏目标圈 | `Modules/HideTargetCircle.dll` | 0.1.6 |
+| 快捷出售 | `Modules/SellOnClick.dll` | 0.2.9 |
+| 极限技调整 | `Modules/LimitBreakAdjustments.dll` | 0.1.6 |
+| 按键连点 | `Modules/KeyRepeater.dll` | 0.2.3 |
+
+清单中的路径、版本和 SHA256 与上述 DLL 对应。原有 `.cs` 文件保留，但不再作为这四个模块的在线下载文件；修复包未包含对应源码，因此这些旧源码不代表本次 DLL 的完整实现。成就追踪仍不加入正式清单。
+
 ## 模块列表
 
 - **快捷出售**（QuickSell）— 按住选中的 Alt、Ctrl、Shift 修饰键并右键单击物品，在 NPC 商店或雇员出售界面执行游戏原生出售动作；修饰键和自动确认设置会保存到本机配置。

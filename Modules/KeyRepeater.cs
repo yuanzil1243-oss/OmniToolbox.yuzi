@@ -125,5 +125,10 @@ public sealed unsafe class KeyRepeater : OmniModuleBase
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint processId);
+
+    private sealed class Settings
+    {
+        public bool Enabled;
+        public float Cps = 10;
+    }
 }
-public sealed class Settings { public bool Enabled; public float Cps = 10; }

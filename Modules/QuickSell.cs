@@ -25,7 +25,7 @@ namespace OmniToolbox.SellOnClickOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class SellOnClick : OmniModuleBase
 {
-    private readonly Settings config = new();
+    private Settings config = new();
     public override ModuleInfo Info { get; } = new()
     {
         Author = "Yuzi", Category = ModuleCategory.Item
@@ -133,14 +133,14 @@ public sealed unsafe class SellOnClick : OmniModuleBase
         pendingSellConfirmation = false;
         DalamudServices.Framework.RunOnFrameworkThread(() => AddonSelectYesnoEvent.ClickYes());
     }
-}
 
-[Serializable]
-public sealed class Settings
-{
-    public bool Alt;
-    public bool Ctrl;
-    public bool Shift = true;
-    public bool AutoConfirmValuable;
+    [Serializable]
+    private sealed class Settings
+    {
+        public bool Alt;
+        public bool Ctrl;
+        public bool Shift = true;
+        public bool AutoConfirmValuable;
+    }
 }
 

@@ -17,7 +17,7 @@ namespace OmniToolbox.HideTargetCircleOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class HideTargetCircle : OmniModuleBase
 {
-    private readonly Settings config = new();
+    private Settings config = new();
     private readonly Stopwatch combatBufferTimer = new();
     private uint originalTargetCircleType;
     private bool hasOriginalTargetCircleType;
@@ -92,11 +92,10 @@ public sealed unsafe class HideTargetCircle : OmniModuleBase
             uiControl.Set("TargetCircleType", targetCircleType);
     }
 
-}
-
-public sealed class Settings
-{
-    public bool ShowWhenWeaponDrawn;
-    public bool ShowInCombat;
-    public float CombatEndDelaySeconds = 3;
+    private sealed class Settings
+    {
+        public bool ShowWhenWeaponDrawn;
+        public bool ShowInCombat;
+        public float CombatEndDelaySeconds = 3;
+    }
 }

@@ -5,11 +5,11 @@
       "InternalName": "HideTargetCircle",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.1.5",
+      "Version": "0.1.6",
       "ApiVersion": 1,
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/HideTargetCircle.cs",
-      "Sha256": "040203CDBFC0BDDEF9AE7ED3D9E853DC819A094261269513CD49525D7AB6C51E",
+      "MinimumOmniVersion": "1.1.8.5",
+      "File": "Modules/HideTargetCircle.dll",
+      "Sha256": "D9E8861D8691D857D372EAD2FFB453773C822F673483423280B25CA3DC68E1E8",
       "Localization": {
         "Source": {
           "Title": "隐藏目标圈",
@@ -21,11 +21,11 @@
       "InternalName": "SellOnClick",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.2.8",
+      "Version": "0.2.9",
       "ApiVersion": 1,
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/QuickSell.cs",
-      "Sha256": "BD680D0EE87B831FCDEBCE722D3F49278DF46F577BC54CE50489549503172292",
+      "MinimumOmniVersion": "1.1.8.5",
+      "File": "Modules/SellOnClick.dll",
+      "Sha256": "BE108DA1F64CC28E1D16828CF44F1C3EDA05C6BDECCC5FFEA63B14005B0A47F3",
       "Localization": {
         "Source": {
           "Title": "快捷出售",
@@ -37,11 +37,11 @@
       "InternalName": "LimitBreakAdjustments",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.1.5",
+      "Version": "0.1.6",
       "ApiVersion": 1,
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/LimitBreakAdjustments.cs",
-      "Sha256": "59498715D73EA075CAD93F66AD0367C841B5E8314026231459294297237B13E3",
+      "MinimumOmniVersion": "1.1.8.5",
+      "File": "Modules/LimitBreakAdjustments.dll",
+      "Sha256": "719A5559473FF9946B3F839E3BC25C78A46DD87ED6EF6B651A11CDE4F3FB99CC",
       "Localization": {
         "Source": {
           "Title": "极限技调整",
@@ -53,11 +53,11 @@
       "InternalName": "KeyRepeater",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.2.2",
+      "Version": "0.2.3",
       "ApiVersion": 1,
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/KeyRepeater.cs",
-      "Sha256": "22453C34ED2A018CDAFC548EC799CA050638C4863D02C93046757ECD31AC1D84",
+      "MinimumOmniVersion": "1.1.8.5",
+      "File": "Modules/KeyRepeater.dll",
+      "Sha256": "230B1BFE650113F12D697A2C1916A8D345490C10C4A7E8E49DCA430410582627",
       "Localization": {
         "Source": {
           "Title": "按键连点",
