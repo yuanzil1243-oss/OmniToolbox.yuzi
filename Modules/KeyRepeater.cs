@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
@@ -23,10 +21,9 @@ namespace OmniToolbox.KeyRepeaterOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class KeyRepeater : OmniModuleBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly Dictionary<int, long> due = new();
     private readonly HashSet<int> bindings = new();
-    private KeyRepeaterConfig config = new();
+    private Settings config = new();
     private string status = "已停用", error = "";
     private long refreshAt;
     private int running;
@@ -42,11 +39,6 @@ public sealed unsafe class KeyRepeater : OmniModuleBase
     public override bool HasSettings => true;
     protected override void OnStart(FeatureLifetime activation)
     {
-        try
-        {
-            if (File.Exists(ConfigPath)) config = JsonSerializer.Deserialize<KeyRepeaterConfig>(File.ReadAllText(ConfigPath), JsonOptions) ?? new();
-        }
-        catch (Exception ex) { error = "配置读取失败，已使用默认停用配置"; DalamudServices.PluginLog.Error(ex, "按键连点配置读取失败"); }
         if (!float.IsFinite(config.Cps) || config.Cps < 1 || config.Cps > 30) config.Cps = 10;
         faulted = false;
         refreshAt = 0;
@@ -72,15 +64,7 @@ public sealed unsafe class KeyRepeater : OmniModuleBase
         if (changed)
         {
             due.Clear(); running = 0; faulted = false;
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-                var temp = ConfigPath + ".tmp";
-                File.WriteAllText(temp, JsonSerializer.Serialize(config, JsonOptions));
-                File.Move(temp, ConfigPath, true);
-                error = "";
-            }
-            catch (Exception ex) { error = "配置保存失败，本次设置仅在当前会话有效"; DalamudServices.PluginLog.Error(ex, "按键连点配置保存失败"); }
+            error = "";
         }
         return changed;
     }
@@ -141,7 +125,5 @@ public sealed unsafe class KeyRepeater : OmniModuleBase
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint processId);
-    private static string ConfigPath => Path.Combine(DalamudServices.PluginInterface.GetPluginConfigDirectory(), "KeyRepeater.json");
 }
-[Serializable]
-public sealed class KeyRepeaterConfig { public bool Enabled; public float Cps = 10; }
+public sealed class Settings { public bool Enabled; public float Cps = 10; }

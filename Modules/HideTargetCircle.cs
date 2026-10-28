@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
@@ -19,8 +17,7 @@ namespace OmniToolbox.HideTargetCircleOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class HideTargetCircle : OmniModuleBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
-    private readonly HideTargetCircleConfig config = new();
+    private readonly Settings config = new();
     private readonly Stopwatch combatBufferTimer = new();
     private uint originalTargetCircleType;
     private bool hasOriginalTargetCircleType;
@@ -39,7 +36,6 @@ public sealed unsafe class HideTargetCircle : OmniModuleBase
 
     protected override void OnStart(FeatureLifetime activation)
     {
-        LoadConfig();
         originalTargetCircleType = DService.Instance().GameConfig.UiControl.GetUInt("TargetCircleType");
         hasOriginalTargetCircleType = true;
         combatBufferTimer.Reset();
@@ -69,7 +65,6 @@ public sealed unsafe class HideTargetCircle : OmniModuleBase
             changed |= ImGui.DragFloat("战斗结束后延迟隐藏（秒）", ref config.CombatEndDelaySeconds, 0.1f, 0, 300, "%.1f");
         }
         config.CombatEndDelaySeconds = Math.Clamp(config.CombatEndDelaySeconds, 0, 300);
-        if (changed) SaveConfig();
         return changed;
     }
 
@@ -97,37 +92,9 @@ public sealed unsafe class HideTargetCircle : OmniModuleBase
             uiControl.Set("TargetCircleType", targetCircleType);
     }
 
-    private static string ConfigPath => Path.Combine(
-        DalamudServices.PluginInterface.GetPluginConfigDirectory(), "HideTargetCircle.json");
-
-    private void LoadConfig()
-    {
-        try
-        {
-            if (!File.Exists(ConfigPath)) return;
-            var saved = JsonSerializer.Deserialize<HideTargetCircleConfig>(File.ReadAllText(ConfigPath), JsonOptions);
-            if (saved == null) return;
-            config.ShowWhenWeaponDrawn = saved.ShowWhenWeaponDrawn;
-            config.ShowInCombat = saved.ShowInCombat;
-            config.CombatEndDelaySeconds = Math.Clamp(saved.CombatEndDelaySeconds, 0, 300);
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取隐藏目标圈配置失败"); }
-    }
-
-    private void SaveConfig()
-    {
-        try
-        {
-            var path = ConfigPath;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存隐藏目标圈配置失败"); }
-    }
 }
 
-[Serializable]
-public sealed class HideTargetCircleConfig
+public sealed class Settings
 {
     public bool ShowWhenWeaponDrawn;
     public bool ShowInCombat;

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Numerics;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -20,8 +18,7 @@ namespace OmniToolbox.LimitBreakAdjustmentsOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
-    private readonly LimitBreakConfig config = new();
+    private readonly Settings config = new();
     private bool preview;
     private byte previewFrames;
     private byte previousBarCount;
@@ -38,7 +35,6 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 
     protected override void OnStart(FeatureLifetime activation)
     {
-        LoadConfig();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
     }
 
@@ -49,7 +45,7 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
             LimitBreakController.Instance()->BarCount = previousBarCount;
         previewFrames = 0;
         preview = false;
-        Apply(LimitBreakConfig.Default);
+        Apply(Settings.Default);
     }
 
     public override bool DrawSettings()
@@ -60,7 +56,6 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
         changed |= ImGui.DragFloat2("极限技条间距", ref config.BarSpacing);
         changed |= ImGui.Checkbox("隐藏文本", ref config.HideText);
         changed |= ImGui.DragFloat2("文本位置", ref config.TextPosition);
-        if (changed) SaveConfig();
         if (ImGui.Checkbox("预览三条极限技", ref preview))
         {
             if (!preview && previewFrames > 0)
@@ -86,37 +81,7 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
         Apply(config);
     }
 
-    private static string ConfigPath => Path.Combine(
-        DalamudServices.PluginInterface.GetPluginConfigDirectory(), "LimitBreakAdjustments.json");
-
-    private void LoadConfig()
-    {
-        try
-        {
-            var path = ConfigPath;
-            if (!File.Exists(path)) return;
-            var saved = JsonSerializer.Deserialize<LimitBreakConfig>(File.ReadAllText(path), JsonOptions);
-            if (saved == null) return;
-            config.BarRotation = saved.BarRotation;
-            config.BarSpacing = saved.BarSpacing;
-            config.TextPosition = saved.TextPosition;
-            config.HideText = saved.HideText;
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取极限技调整配置失败"); }
-    }
-
-    private void SaveConfig()
-    {
-        try
-        {
-            var path = ConfigPath;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存极限技调整配置失败"); }
-    }
-
-    private static void Apply(LimitBreakConfig value)
+    private static void Apply(Settings value)
     {
         var addon = RaptureAtkUnitManager.Instance()->GetAddonByName("_LimitBreak");
         if (addon == null || !addon->IsVisible) return;
@@ -139,9 +104,9 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 }
 
 [Serializable]
-public sealed class LimitBreakConfig
+public sealed class Settings
 {
-    public static readonly LimitBreakConfig Default = new();
+    public static readonly Settings Default = new();
     public float BarRotation;
     public Vector2 BarSpacing = new(164, 0);
     public Vector2 TextPosition = new(12, 1);

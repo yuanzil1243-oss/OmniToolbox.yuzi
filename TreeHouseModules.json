@@ -5,56 +5,65 @@
       "InternalName": "HideTargetCircle",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.1.4",
+      "Version": "0.1.5",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/HideTargetCircle.cs",
-      "Sha256": "1D26A4EA5F543D38CA98D1C8798DB1F6536A3A599945287E59C34F93D2A98E5E",
-      "Localization": { "Source": { "Title": "隐藏目标圈", "Description": "默认隐藏选中目标的目标圈，可在拔出武器或战斗状态下显示，并设置战斗结束后的延迟隐藏时间。" } }
-    },
-    {
-      "InternalName": "AchievementTracker",
-      "Author": "Yuzi",
-      "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.5.14",
-      "ApiVersion": 1,
-      "MinimumOmniVersion": "1.1.8.2",
-      "File": "Modules/AchievementTracker.cs",
-      "Sha256": "E1927C500242058B6572535E0038B48D312DA3F417186AD951CDEC6D690DF9A9",
-      "Localization": { "Source": { "Title": "成就追踪", "Description": "读取游戏原生成就进度并显示不限数量的目标；有计数器的成就显示进度，无计数器的成就显示达成条件；按角色保存并同步原生目标列表，支持基于游戏数据和离线资料的区域预设。" } }
+      "Sha256": "040203CDBFC0BDDEF9AE7ED3D9E853DC819A094261269513CD49525D7AB6C51E",
+      "Localization": {
+        "Source": {
+          "Title": "隐藏目标圈",
+          "Description": "默认隐藏选中目标的目标圈，可在拔出武器或战斗状态下显示，并设置战斗结束后的延迟隐藏时间。"
+        }
+      }
     },
     {
       "InternalName": "SellOnClick",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.2.7",
+      "Version": "0.2.8",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/QuickSell.cs",
-      "Sha256": "49638BF970F30AA559564E6543C59616C151DDECB67ECF379467927E48710F23",
-      "Localization": { "Source": { "Title": "快捷出售", "Description": "按住修饰键右键单击物品，调用商店或雇员的原生系统出售动作。" } }
+      "Sha256": "BD680D0EE87B831FCDEBCE722D3F49278DF46F577BC54CE50489549503172292",
+      "Localization": {
+        "Source": {
+          "Title": "快捷出售",
+          "Description": "按住修饰键右键单击物品，调用商店或雇员的原生系统出售动作。"
+        }
+      }
     },
     {
       "InternalName": "LimitBreakAdjustments",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.1.4",
+      "Version": "0.1.5",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/LimitBreakAdjustments.cs",
-      "Sha256": "7ED1E13FC5EF3C51022FF90870E5E6907BA18D612D8FF4FF7768BC850DC95BB9",
-      "Localization": { "Source": { "Title": "极限技调整", "Description": "调整极限技条的旋转、间距和文本显示。" } }
+      "Sha256": "59498715D73EA075CAD93F66AD0367C841B5E8314026231459294297237B13E3",
+      "Localization": {
+        "Source": {
+          "Title": "极限技调整",
+          "Description": "调整极限技条的旋转、间距和文本显示。"
+        }
+      }
     },
     {
       "InternalName": "KeyRepeater",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.2.1",
+      "Version": "0.2.2",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/KeyRepeater.cs",
-      "Sha256": "DE88835D45885B16EE2388E2822DB30D29CA116FA58DA3EEB109AD5ADF944A30",
-      "Localization": { "Source": { "Title": "按键连点", "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。" } }
+      "Sha256": "22453C34ED2A018CDAFC548EC799CA050638C4863D02C93046757ECD31AC1D84",
+      "Localization": {
+        "Source": {
+          "Title": "按键连点",
+          "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。"
+        }
+      }
     }
   ]
 }

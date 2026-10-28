@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Addon.Lifecycle;
@@ -27,8 +25,7 @@ namespace OmniToolbox.SellOnClickOnline;
 [ModuleApiVersion(1)]
 public sealed unsafe class SellOnClick : OmniModuleBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
-    private readonly SellOnClickConfig config = new();
+    private readonly Settings config = new();
     public override ModuleInfo Info { get; } = new()
     {
         Author = "Yuzi", Category = ModuleCategory.Item
@@ -47,7 +44,6 @@ public sealed unsafe class SellOnClick : OmniModuleBase
 
     protected override void OnStart(FeatureLifetime activation)
     {
-        LoadConfig();
         var sheet = DalamudServices.DataManager.GetExcelSheet<Addon>();
         vendorLabel = sheet.GetRow(93).Text.ExtractText();
         retainerLabel = sheet.GetRow(5480).Text.ExtractText();
@@ -79,38 +75,7 @@ public sealed unsafe class SellOnClick : OmniModuleBase
         ImGui.TextUnformatted("按住全部选中的修饰键＋鼠标右键单击物品。\n仅执行游戏菜单中可用的系统出售。");
         if (!config.Alt && !config.Ctrl && !config.Shift)
             ImGui.TextUnformatted("请至少选择一个修饰键；当前不会触发出售。");
-        if (changed) SaveConfig();
         return changed;
-    }
-
-    private static string ConfigPath => Path.Combine(
-        DalamudServices.PluginInterface.GetPluginConfigDirectory(), "QuickSell.json");
-
-    private void LoadConfig()
-    {
-        try
-        {
-            var path = ConfigPath;
-            if (!File.Exists(path)) return;
-            var saved = JsonSerializer.Deserialize<SellOnClickConfig>(File.ReadAllText(path), JsonOptions);
-            if (saved == null) return;
-            config.Alt = saved.Alt;
-            config.Ctrl = saved.Ctrl;
-            config.Shift = saved.Shift;
-            config.AutoConfirmValuable = saved.AutoConfirmValuable;
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "读取快捷出售配置失败"); }
-    }
-
-    private void SaveConfig()
-    {
-        try
-        {
-            var path = ConfigPath;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions));
-        }
-        catch (Exception ex) { DalamudServices.PluginLog.Error(ex, "保存快捷出售配置失败"); }
     }
     private bool Held() => (config.Alt || config.Ctrl || config.Shift)
         && (!config.Alt || DalamudServices.KeyState[VirtualKey.MENU])
@@ -171,7 +136,7 @@ public sealed unsafe class SellOnClick : OmniModuleBase
 }
 
 [Serializable]
-public sealed class SellOnClickConfig
+public sealed class Settings
 {
     public bool Alt;
     public bool Ctrl;
