@@ -28,8 +28,7 @@ public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "极限技调整", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "调整极限技条的旋转、间距和文本显示。"
+        Author = "Yuzi", Category = ModuleCategory.Item
     };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {

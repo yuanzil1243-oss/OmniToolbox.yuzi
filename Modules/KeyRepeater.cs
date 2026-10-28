@@ -30,8 +30,7 @@ public sealed unsafe class KeyRepeater : ModuleBase
     private bool faulted;
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "按键连点", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "自动读取游戏技能栏快捷键，按住任意已绑定按键即可持续连点。"
+        Author = "Yuzi", Category = ModuleCategory.Item
     };
     public override bool HasSettings => true;
     protected override void OnEnable()

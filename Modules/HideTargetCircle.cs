@@ -29,8 +29,7 @@ public sealed unsafe class HideTargetCircle : OmniModuleBase
 
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "隐藏目标圈", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "隐藏选中目标的目标圈，并可按拔出武器、战斗状态和战斗结束延迟控制显示。"
+        Author = "Yuzi", Category = ModuleCategory.Item
     };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {

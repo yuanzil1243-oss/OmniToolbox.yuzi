@@ -32,8 +32,7 @@ public sealed unsafe class SellOnClick : OmniModuleBase
     private readonly SellOnClickConfig config = new();
     public override ModuleInfo Info { get; } = new()
     {
-        Title = "快捷出售", Author = "Yuzi", Category = ModuleCategory.Item,
-        Description = "按住配置的修饰键右键单击物品，执行当前商店或雇员菜单的系统出售动作。"
+        Author = "Yuzi", Category = ModuleCategory.Item
     };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {
