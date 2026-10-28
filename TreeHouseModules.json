@@ -9,7 +9,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/HideTargetCircle.cs",
-      "Sha256": "CF5CB88F01C3A91033E3006D2B3A7FF249F2D89AC14CB59B26F474C68A0F68A6",
+      "Sha256": "80B23B3DE13A35E9E6A71FA3FB5E2AFC4C778326246E0C6E12F36B016D44B69E",
       "Localization": { "Source": { "Title": "隐藏目标圈", "Description": "默认隐藏选中目标的目标圈，可在拔出武器或战斗状态下显示，并设置战斗结束后的延迟隐藏时间。" } }
     },
     {
@@ -20,7 +20,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/AchievementTracker.cs",
-      "Sha256": "EA001ECF6E445C44EAA00CEC673843F2BBB8393F46EE90D2E735029D3D352CFE",
+      "Sha256": "4952D3CD86F2D61FF182D1ACDAAB0E7139BF6F8A7D4C1C0890C27582DCF17291",
       "Localization": { "Source": { "Title": "成就追踪", "Description": "读取游戏原生成就进度并显示不限数量的目标；有计数器的成就显示进度，无计数器的成就显示达成条件；按角色保存并同步原生目标列表，支持基于游戏数据和离线资料的区域预设。" } }
     },
     {
@@ -31,7 +31,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/QuickSell.cs",
-      "Sha256": "667CE48B7C05FD3FA24371CAD01E84FEC2597949D52DEE8E12A0B229DF37A54F",
+      "Sha256": "2D56F13F38B7D04D824E9920370C7AE3D86B839CAFB0AE94A0F3393E2929A5BD",
       "Localization": { "Source": { "Title": "快捷出售", "Description": "按住修饰键右键单击物品，调用商店或雇员的原生系统出售动作。" } }
     },
     {
@@ -42,7 +42,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/LimitBreakAdjustments.cs",
-      "Sha256": "914A1919987465A2194B480A2DAA50AB06BA60252634CC5D65FFA9F1A220D177",
+      "Sha256": "DAD913D6E8BCF8701A10FDFEEC75D48058BDE70315AF5B2014324B5E38CE60FE",
       "Localization": { "Source": { "Title": "极限技调整", "Description": "调整极限技条的旋转、间距和文本显示。" } }
     },
     {
@@ -53,7 +53,7 @@
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.2",
       "File": "Modules/KeyRepeater.cs",
-      "Sha256": "DF28E4CBFE92B5C0ED1FA4AC5CF76D7B4193A56028A5CA83D8AA502572908A00",
+      "Sha256": "A42288B0AA660674F94CA5A2B1B5C38422C5E8703B997233F7E930D95A8AD0DB",
       "Localization": { "Source": { "Title": "按键连点", "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。" } }
     }
   ]
