@@ -64,6 +64,22 @@
           "Description": "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。"
         }
       }
+    },
+    {
+      "InternalName": "AchievementTracker",
+      "Author": "Yuzi",
+      "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
+      "Version": "0.5.16",
+      "ApiVersion": 1,
+      "MinimumOmniVersion": "1.1.8.6",
+      "File": "Modules/AchievementTracker.dll",
+      "Sha256": "EB2BE921ED304D9E0195D88A6BAFB91F243D72C70D4111AC17564BDD947645EF",
+      "Localization": {
+        "Source": {
+          "Title": "成就追踪",
+          "Description": "读取游戏原生成就进度，按角色保存追踪目标与显示设置。"
+        }
+      }
     }
   ]
 }

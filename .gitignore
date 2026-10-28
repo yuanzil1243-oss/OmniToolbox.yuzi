@@ -1,0 +1,4 @@
+/build/bin/
+/build/obj/
+/tests/**/bin/
+/tests/**/obj/

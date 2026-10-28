@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>AchievementTracker</AssemblyName>
+    <Version>0.5.16</Version>
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+    <OmniDir Condition="'$(OmniDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\OmniToolbox\1.1.8.6</OmniDir>
+    <DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\dev</DalamudDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Modules\AchievementTracker.cs" />
+    <Compile Include="..\Modules\AchievementTrackerProfileStore.cs" />
+    <Compile Include="..\Modules\AchievementTrackerProfileData.cs" />
+    <Reference Include="OmniToolbox.Common"><HintPath>$(OmniDir)\OmniToolbox.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="TreeTools"><HintPath>$(OmniDir)\TreeTools.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="OmenTools"><HintPath>$(OmniDir)\OmenTools.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Dalamud"><HintPath>$(DalamudDir)\Dalamud.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Dalamud.Bindings.ImGui"><HintPath>$(DalamudDir)\Dalamud.Bindings.ImGui.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="FFXIVClientStructs"><HintPath>$(DalamudDir)\FFXIVClientStructs.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Lumina"><HintPath>$(DalamudDir)\Lumina.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Lumina.Excel"><HintPath>$(DalamudDir)\Lumina.Excel.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="InteropGenerator.Runtime"><HintPath>$(DalamudDir)\InteropGenerator.Runtime.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>
