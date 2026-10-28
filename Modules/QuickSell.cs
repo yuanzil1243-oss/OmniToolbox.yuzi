@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Dalamud.Bindings.ImGui;
@@ -18,11 +19,14 @@ using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
+using OmniToolbox.UI;
 using OmniToolbox.Lifecycle;
+using TreeTools.Lifecycle;
 
 namespace OmniToolbox.SellOnClickOnline;
 
-public sealed unsafe class SellOnClick : ModuleBase
+[ModuleApiVersion(1)]
+public sealed unsafe class SellOnClick : OmniModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly SellOnClickConfig config = new();
@@ -31,6 +35,10 @@ public sealed unsafe class SellOnClick : ModuleBase
         Title = "快捷出售", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "按住配置的修饰键右键单击物品，执行当前商店或雇员菜单的系统出售动作。"
     };
+    public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
+    {
+        ["Title"] = "快捷出售", ["Description"] = "按住配置的修饰键右键单击物品，执行当前商店或雇员菜单的系统出售动作。"
+    });
     public override bool HasSettings => true;
     private Hook<AgentInventoryContext.Delegates.OpenForItemSlot>? hook;
     private string vendorLabel = "";
@@ -39,7 +47,7 @@ public sealed unsafe class SellOnClick : ModuleBase
     private AddonEventRegistry? addonEvents;
     private bool pendingSellConfirmation;
 
-    protected override void OnEnable()
+    protected override void OnStart(FeatureLifetime activation)
     {
         LoadConfig();
         var sheet = DalamudServices.DataManager.GetExcelSheet<Addon>();
@@ -55,7 +63,7 @@ public sealed unsafe class SellOnClick : ModuleBase
         }
         catch { hook?.Dispose(); hook = null; throw; }
     }
-    protected override void OnDisable()
+    protected override void OnStop()
     {
         addonEvents?.Dispose();
         addonEvents = null;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -10,10 +11,13 @@ using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
+using OmniToolbox.UI;
+using TreeTools.Lifecycle;
 
 namespace OmniToolbox.HideTargetCircleOnline;
 
-public sealed unsafe class HideTargetCircle : ModuleBase
+[ModuleApiVersion(1)]
+public sealed unsafe class HideTargetCircle : OmniModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly HideTargetCircleConfig config = new();
@@ -28,9 +32,13 @@ public sealed unsafe class HideTargetCircle : ModuleBase
         Title = "隐藏目标圈", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "隐藏选中目标的目标圈，并可按拔出武器、战斗状态和战斗结束延迟控制显示。"
     };
+    public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
+    {
+        ["Title"] = "隐藏目标圈", ["Description"] = "隐藏选中目标的目标圈，并可按拔出武器、战斗状态和战斗结束延迟控制显示。"
+    });
     public override bool HasSettings => true;
 
-    protected override void OnEnable()
+    protected override void OnStart(FeatureLifetime activation)
     {
         LoadConfig();
         originalTargetCircleType = DService.Instance().GameConfig.UiControl.GetUInt("TargetCircleType");
@@ -41,7 +49,7 @@ public sealed unsafe class HideTargetCircle : ModuleBase
         DalamudServices.Framework.Update += OnFrameworkUpdate;
     }
 
-    protected override void OnDisable()
+    protected override void OnStop()
     {
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         if (hasOriginalTargetCircleType)

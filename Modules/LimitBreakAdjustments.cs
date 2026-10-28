@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text.Json;
@@ -11,10 +12,13 @@ using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
 using OmniToolbox.Host;
+using OmniToolbox.UI;
+using TreeTools.Lifecycle;
 
 namespace OmniToolbox.LimitBreakAdjustmentsOnline;
 
-public sealed unsafe class LimitBreakAdjustments : ModuleBase
+[ModuleApiVersion(1)]
+public sealed unsafe class LimitBreakAdjustments : OmniModuleBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { IncludeFields = true };
     private readonly LimitBreakConfig config = new();
@@ -27,15 +31,19 @@ public sealed unsafe class LimitBreakAdjustments : ModuleBase
         Title = "极限技调整", Author = "Yuzi", Category = ModuleCategory.Item,
         Description = "调整极限技条的旋转、间距和文本显示。"
     };
+    public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
+    {
+        ["Title"] = "极限技调整", ["Description"] = "调整极限技条的旋转、间距和文本显示。"
+    });
     public override bool HasSettings => true;
 
-    protected override void OnEnable()
+    protected override void OnStart(FeatureLifetime activation)
     {
         LoadConfig();
         DalamudServices.Framework.Update += OnFrameworkUpdate;
     }
 
-    protected override void OnDisable()
+    protected override void OnStop()
     {
         DalamudServices.Framework.Update -= OnFrameworkUpdate;
         if (previewFrames > 0)
