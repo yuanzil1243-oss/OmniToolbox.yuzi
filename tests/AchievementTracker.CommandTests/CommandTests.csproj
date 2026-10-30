@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\dev</DalamudDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Modules\AchievementTrackerCommandRoute.cs" Link="AchievementTrackerCommandRoute.cs" />
+    <Reference Include="Dalamud"><HintPath>$(DalamudDir)\Dalamud.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

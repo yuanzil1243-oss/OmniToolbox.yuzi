@@ -2,7 +2,7 @@
 
 Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 
-当前正式清单使用 DLL 交付。前四个模块来自 `OmniToolbox-Yuzi-Local-Omni1.1.8.5-20261028` 修复包，最低宿主为 Omni **1.1.8.5**；成就追踪 **0.6.0** 使用本仓库源码构建，最低宿主为 Omni **1.1.8.6**。
+当前正式清单使用 DLL 交付。前四个模块来自 `OmniToolbox-Yuzi-Local-Omni1.1.8.5-20261028` 修复包，最低宿主为 Omni **1.1.8.5**；成就追踪 **0.6.2** 使用本仓库源码构建，最低宿主为 Omni **1.1.8.6**。本次正式发布的 DLL 与本地 0.6.2 测试文件完全一致。
 
 | 模块 | 发布文件 | 版本 |
 | --- | --- | --- |
@@ -10,7 +10,7 @@ Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 | 快捷出售 | `Modules/SellOnClick.dll` | 0.2.9 |
 | 极限技调整 | `Modules/LimitBreakAdjustments.dll` | 0.1.6 |
 | 按键连点 | `Modules/KeyRepeater.dll` | 0.2.3 |
-| 成就追踪 | `Modules/AchievementTracker.dll` | 0.6.0 |
+| 成就追踪 | `Modules/AchievementTracker.dll` | 0.6.2 |
 
 清单中的路径、版本和 SHA256 与上述 DLL 对应。前四个模块的原有 `.cs` 文件保留，但不再作为在线下载文件；修复包未包含对应源码，因此这些旧源码不代表修复包 DLL 的完整实现。成就追踪的完整源码、构建工程和存储测试随本仓库保存。
 
@@ -18,7 +18,7 @@ Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 
 - **快捷出售**（QuickSell）— 按住选中的 Alt、Ctrl、Shift 修饰键并右键单击物品，在 NPC 商店或雇员出售界面执行游戏原生出售动作；修饰键和自动确认设置会保存到本机配置。
 - **极限技调整**（LimitBreakAdjustments）— 调整极限技条旋转、条间距、文本位置与显示，并提供三条极限技预览。
-- **成就追踪**（AchievementTracker）— 直接读取游戏原生目标列表和成就数据；有计数器的成就显示实时进度，无计数器的成就显示达成条件，支持按角色保存、地区过滤和手动搜索添加。地区预设优先使用游戏数据中的明确关联，再使用离线整理的补充映射；启用后可使用 `/omni AchievementTracker overlay` 切换游戏内窗口。
+- **成就追踪**（AchievementTracker）— 直接读取游戏原生目标列表和成就数据；有计数器的成就显示实时进度，无计数器的成就显示达成条件，支持按角色保存、地区过滤和手动搜索添加。地区预设优先使用游戏数据中的明确关联，再使用离线整理的补充映射；启用后可使用 `/omni 成就追踪悬浮窗` 切换游戏内窗口。
 - **隐藏目标圈**（HideTargetCircle）— 默认隐藏选中目标的目标圈，可选拔出武器或战斗状态时显示，并设置战斗结束后的延迟隐藏时间。
 - **按键连点**（KeyRepeater）— 自动读取游戏技能栏主、副快捷键；按住任意已绑定按键或组合键时，按设定 CPS 持续发送输入，松开后立即停止。
 
@@ -38,6 +38,15 @@ https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHous
 
 **版本规则：以后任何改动都必须递增涉及模块的版本号，同步构建产物、清单、SHA256 和相关说明，不得覆盖发布同版本的不同内容。
 
+### 成就追踪 0.6.2
+
+- 在“不限制地区”后增加“添加当前地区”；点击后自动取消“不限制地区”，将角色当前所在地区勾选到列表中，保留已有地区且不会重复添加。
+- 当前地区数据不可用时禁用按钮；手动添加和已保存目标均支持此操作。
+- 修复 `/omni 成就追踪悬浮窗` 被 Omni 当作未知指令并显示帮助的问题；停用模块时恢复原命令处理器。
+- 兼容 `/omni AchievementTracker overlay`；其他 Omni 指令继续交给原处理器。
+- 使用 Omni 1.1.8.7 程序集完成 Release 编译，24 项命令转发/卸载检查和 18 项角色存储检查通过。
+- 从本地测试版切换到在线版时，先移除本地成就追踪加载条目并保留角色配置文件，再安装或更新在线版，避免内部名称重复。
+
 ### 成就追踪 0.6.0
 
 - 采用 API 1 的嵌套 `Settings` / 可写 `config`，设置词条完整本地化，事件与 Hook 通过 `FeatureLifetime` 管理。
@@ -52,6 +61,7 @@ https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHous
 ```powershell
 dotnet build build/AchievementTracker.csproj -c Release
 dotnet run --project tests/AchievementTracker.StorageTests/StorageTests.csproj -c Release
+dotnet run --project tests/AchievementTracker.CommandTests/CommandTests.csproj -c Release
 ```
 
 成就地区补充数据维护在 `Modules/AchievementTracker.cs` 的 `OfflineRegionSupplements` 中，只保存成就 ID 与 `TerritoryType` ID。Wiki 只在开发期用于整理和复核映射，不作为游戏运行时依赖；每次大版本资料完整后再更新映射。区域不明确、地区 ID 无法解析或候选区域超过 10 个时不自动预设。映射只在新添加或重新选择成就时应用，不覆盖现有目标的地区设置。

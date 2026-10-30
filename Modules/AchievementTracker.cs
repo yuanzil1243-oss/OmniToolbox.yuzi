@@ -71,13 +71,15 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     private bool legacyMigrationPending;
 
     private delegate void ReceiveAchievementProgressDelegate(FfxivAchievement* achievement, uint id, uint current, uint max);
-    private const string OmniOverlayCommand = "成就追踪悬浮窗";
+    private const string OmniCommand = AchievementTrackerCommandRoute.Command;
+    private const string OmniOverlayCommand = AchievementTrackerCommandRoute.Alias;
     public override ModuleInfo Info { get; } = new()
     {
         Author = "Yuzi", Category = ModuleCategory.Item,
         Commands = new[]
         {
             new ModuleCommand("ToggleOverlayCommand", OmniCommandCatalog.FormatModule(nameof(AchievementTracker), "overlay")),
+            new ModuleCommand("ToggleOverlayAliasCommand", $"{OmniCommand} {OmniOverlayCommand}"),
         },
     };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -85,6 +87,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
         ["Title"] = "成就追踪",
         ["Description"] = "读取游戏原生成就进度，按角色保存追踪目标与显示设置。",
         ["ToggleOverlayCommand"] = "打开或关闭游戏内成就追踪悬浮窗",
+        ["ToggleOverlayAliasCommand"] = "打开或关闭游戏内成就追踪悬浮窗",
         ["NewCharacterDefaults"] = "新角色默认设置",
         ["DefaultShowOverlay"] = "新角色默认显示悬浮窗",
         ["DefaultShowCompleted"] = "新角色的目标默认完成后仍显示",
@@ -113,6 +116,9 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
         ["ReadingProgress"] = "正在读取成就进度…",
         ["NoCounter"] = "此成就没有进度计数器",
         ["IgnoreRegion"] = "不限制地区",
+        ["AddCurrentTerritory"] = "添加当前地区",
+        ["AddCurrentTerritoryHelp"] = "添加角色所在地区，并自动取消“不限制地区”",
+        ["CurrentTerritoryUnavailable"] = "当前地区尚未就绪",
         ["SearchTerritory"] = "搜索区域、地区中文名或 ID",
         ["Select"] = "选择",
         ["RegionGroup"] = "区域",
@@ -222,6 +228,8 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
         uiBuilder.Draw += DrawOverlay;
         UpdateTerritory();
         EnsureCharacterProfile();
+        activation.Add(AchievementTrackerCommandRoute.Attach(DalamudServices.CommandManager, ToggleOverlay));
+        DalamudServices.PluginLog.Information("成就追踪：已注册 /omni 成就追踪悬浮窗");
     }
 
     protected override void OnStop()
@@ -619,6 +627,42 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     {
         MigrateLegacyRegion(goal);
         var changed = ImGui.Checkbox(L("IgnoreRegion"), ref goal.IgnoreRegion);
+
+        ImGui.SameLine();
+        var clientState = DService.Instance().ClientState;
+        var currentTerritory = clientState.IsLoggedIn
+            ? DalamudServices.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(clientState.TerritoryType)
+            : null;
+        var currentArea = currentTerritory.HasValue
+            ? currentTerritory.Value.PlaceName.ValueNullable?.Name.ToString() ?? ""
+            : "";
+        var canAddCurrentTerritory = currentTerritory.HasValue
+            && currentTerritory.Value.RowId > 0
+            && !string.IsNullOrWhiteSpace(currentArea);
+        ImGui.BeginDisabled(!canAddCurrentTerritory);
+        if (ImGui.Button(L("AddCurrentTerritory"), new System.Numerics.Vector2(0, ImGui.GetFrameHeight()))
+            && canAddCurrentTerritory)
+        {
+            var row = currentTerritory!.Value;
+            var regionId = (int)row.RowId;
+            var alreadySelected = goal.Regions.Any(region => region.Id == regionId);
+            if (!alreadySelected)
+            {
+                goal.Regions.Add(new AchievementRegion
+                {
+                    Id = regionId,
+                    Group = row.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "",
+                    Name = currentArea,
+                });
+            }
+            changed |= goal.IgnoreRegion || !alreadySelected;
+            goal.IgnoreRegion = false;
+            SyncLegacyRegionFields(goal);
+        }
+        ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(L(canAddCurrentTerritory ? "AddCurrentTerritoryHelp" : "CurrentTerritoryUnavailable"));
+
         if (goal.IgnoreRegion) return changed;
 
         ImGui.SameLine();

@@ -7,7 +7,10 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>AchievementTracker</AssemblyName>
-    <Version>0.6.0</Version>
+    <Version>0.6.2</Version>
+    <AssemblyVersion>0.6.2.0</AssemblyVersion>
+    <FileVersion>0.6.2.0</FileVersion>
+    <InformationalVersion>0.6.2</InformationalVersion>
     <DebugType>none</DebugType>
     <Deterministic>true</Deterministic>
     <OmniDir Condition="'$(OmniDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\OmniToolbox\1.1.8.6</OmniDir>
@@ -15,6 +18,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\Modules\AchievementTracker.cs" />
+    <Compile Include="..\Modules\AchievementTrackerCommandRoute.cs" />
     <Compile Include="..\Modules\AchievementTrackerProfileStore.cs" />
     <Compile Include="..\Modules\AchievementTrackerProfileData.cs" />
     <Reference Include="OmniToolbox.Common"><HintPath>$(OmniDir)\OmniToolbox.Common.dll</HintPath><Private>false</Private></Reference>
