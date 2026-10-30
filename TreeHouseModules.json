@@ -69,11 +69,11 @@
       "InternalName": "AchievementTracker",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.6.2",
+      "Version": "0.6.3",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.6",
       "File": "Modules/AchievementTracker.dll",
-      "Sha256": "38C226292828CC34EBCBCA937082A8F210AE27A0550EB4B6878AD5A827F3D904",
+      "Sha256": "FB605C2F1970218E4F0CCF04169D5C0AD224F6D664A9215D32AB982EA88EF24A",
       "Localization": {
         "Source": {
           "Title": "成就追踪",

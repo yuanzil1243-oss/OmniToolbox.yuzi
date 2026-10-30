@@ -62,17 +62,7 @@ internal sealed class AchievementTrackerCommandRoute : IDisposable
     }
 
     private static bool IsOverlayCommand(string arguments)
-    {
-        var parts = arguments.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 1)
-            return string.Equals(parts[0], Alias, StringComparison.Ordinal);
-
-        // The host's static command catalog does not always include online modules.
-        return parts.Length == 2
-            && string.Equals(parts[0], "AchievementTracker", StringComparison.OrdinalIgnoreCase)
-            && (string.Equals(parts[1].Trim(), "overlay", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(parts[1].Trim(), Alias, StringComparison.Ordinal));
-    }
+        => string.Equals(arguments.Trim(), Alias, StringComparison.Ordinal);
 
     public void Dispose()
     {

@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using Dalamud.Bindings.ImGui;
 using System.Threading.Tasks;
-using OmniToolbox.Commands;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
@@ -78,7 +77,6 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
         Author = "Yuzi", Category = ModuleCategory.Item,
         Commands = new[]
         {
-            new ModuleCommand("ToggleOverlayCommand", OmniCommandCatalog.FormatModule(nameof(AchievementTracker), "overlay")),
             new ModuleCommand("ToggleOverlayAliasCommand", $"{OmniCommand} {OmniOverlayCommand}"),
         },
     };
@@ -86,7 +84,6 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     {
         ["Title"] = "成就追踪",
         ["Description"] = "读取游戏原生成就进度，按角色保存追踪目标与显示设置。",
-        ["ToggleOverlayCommand"] = "打开或关闭游戏内成就追踪悬浮窗",
         ["ToggleOverlayAliasCommand"] = "打开或关闭游戏内成就追踪悬浮窗",
         ["NewCharacterDefaults"] = "新角色默认设置",
         ["DefaultShowOverlay"] = "新角色默认显示悬浮窗",
@@ -170,8 +167,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     public override bool TryHandleCommand(string arguments)
     {
         var command = arguments.Trim();
-        if (!string.Equals(command, "overlay", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(command, OmniOverlayCommand, StringComparison.Ordinal)) return false;
+        if (!string.Equals(command, OmniOverlayCommand, StringComparison.Ordinal)) return false;
         ToggleOverlay();
         return true;
     }

@@ -41,24 +41,28 @@ Check(toggles == 2 && forwarded.Count == 0, "Chinese alias toggles without falli
 commands.ProcessCommand("/omni AchievementTracker overlay");
 commands.ProcessCommand("/omni achievementtracker OVERLAY");
 commands.ProcessCommand("/omni AchievementTracker 成就追踪悬浮窗");
-Check(toggles == 5 && forwarded.Count == 0, "module routes work even when the static host catalog rejects online names");
+Check(toggles == 2 && forwarded.Count == 3
+    && forwarded[0] == ("/omni", "AchievementTracker overlay")
+    && forwarded[1] == ("/omni", "achievementtracker OVERLAY")
+    && forwarded[2] == ("/omni", "AchievementTracker 成就追踪悬浮窗"),
+    "removed module-prefixed routes are forwarded unchanged without toggling");
 foreach (var arguments in new[] { "", "help", "CustomHotbar toggle 1", "成就追踪悬浮窗 extra", "AchievementTracker", "AchievementTracker overlay extra", "AchievementTracker disable", "成就追踪" })
 {
     var count = forwarded.Count;
     commands.DispatchCommand("/omni", arguments, wrapped);
-    Check(forwarded.Count == count + 1 && forwarded[^1] == ("/omni", arguments) && toggles == 5,
+    Check(forwarded.Count == count + 1 && forwarded[^1] == ("/omni", arguments) && toggles == 2,
         $"unrelated input is forwarded unchanged: [{arguments}]");
 }
 route.Dispose();
 route.Dispose();
 Check(ReferenceEquals(commands.Commands["/omni"], original), "disabling twice restores the original handler exactly once");
 wrapped.Handler("/omni", "成就追踪悬浮窗");
-Check(toggles == 5 && forwarded[^1].Arguments == "成就追踪悬浮窗", "a retained disabled wrapper only forwards");
+Check(toggles == 2 && forwarded[^1].Arguments == "成就追踪悬浮窗", "a retained disabled wrapper only forwards");
 
 using (var enabledAgain = AchievementTrackerCommandRoute.Attach(commands, () => toggles++))
 {
     commands.ProcessCommand("/omni 成就追踪悬浮窗");
-    Check(toggles == 6, "reenabling toggles once without stacking old callbacks");
+    Check(toggles == 3, "reenabling toggles once without stacking old callbacks");
 }
 Check(ReferenceEquals(commands.Commands["/omni"], original), "reenabled registration is restored on disposal");
 
@@ -69,7 +73,7 @@ commands.RemoveHandler("/omni");
 commands.AddHandler("/omni", external);
 chained.Dispose();
 commands.ProcessCommand("/omni 成就追踪悬浮窗");
-Check(ReferenceEquals(commands.Commands["/omni"], external) && toggles == 6 && forwarded[^1].Arguments == "成就追踪悬浮窗",
+Check(ReferenceEquals(commands.Commands["/omni"], external) && toggles == 3 && forwarded[^1].Arguments == "成就追踪悬浮窗",
     "disabling preserves later registrations and deactivates retained callbacks");
 commands.RemoveHandler("/omni");
 commands.AddHandler("/omni", original);
@@ -85,7 +89,7 @@ var recovery = AchievementTrackerCommandRoute.Attach(commands, () => toggles++);
 commands.FailNextAdd = true;
 Reject(recovery.Dispose, "restoration failure is reported");
 commands.ProcessCommand("/omni 成就追踪悬浮窗");
-Check(commands.Commands.ContainsKey("/omni") && toggles == 6 && forwarded[^1].Arguments == "成就追踪悬浮窗",
+Check(commands.Commands.ContainsKey("/omni") && toggles == 3 && forwarded[^1].Arguments == "成就追踪悬浮窗",
     "a failed restore retains an inactive forwarding command");
 recovery.Dispose();
 Check(ReferenceEquals(commands.Commands["/omni"], original), "restoration can be retried after transient failure");

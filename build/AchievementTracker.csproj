@@ -7,10 +7,11 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>AchievementTracker</AssemblyName>
-    <Version>0.6.2</Version>
-    <AssemblyVersion>0.6.2.0</AssemblyVersion>
-    <FileVersion>0.6.2.0</FileVersion>
-    <InformationalVersion>0.6.2</InformationalVersion>
+    <Version>0.6.3</Version>
+    <AssemblyVersion>0.6.3.0</AssemblyVersion>
+    <FileVersion>0.6.3.0</FileVersion>
+    <InformationalVersion>0.6.3</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType>
     <Deterministic>true</Deterministic>
     <OmniDir Condition="'$(OmniDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\OmniToolbox\1.1.8.6</OmniDir>

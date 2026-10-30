@@ -2,7 +2,7 @@
 
 Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 
-当前正式清单使用 DLL 交付。前四个模块来自 `OmniToolbox-Yuzi-Local-Omni1.1.8.5-20261028` 修复包，最低宿主为 Omni **1.1.8.5**；成就追踪 **0.6.2** 使用本仓库源码构建，最低宿主为 Omni **1.1.8.6**。本次正式发布的 DLL 与本地 0.6.2 测试文件完全一致。
+当前正式清单使用 DLL 交付。前四个模块来自 `OmniToolbox-Yuzi-Local-Omni1.1.8.5-20261028` 修复包，最低宿主为 Omni **1.1.8.5**；成就追踪 **0.6.3** 使用本仓库源码构建，最低宿主为 Omni **1.1.8.6**。
 
 | 模块 | 发布文件 | 版本 |
 | --- | --- | --- |
@@ -10,7 +10,7 @@ Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 | 快捷出售 | `Modules/SellOnClick.dll` | 0.2.9 |
 | 极限技调整 | `Modules/LimitBreakAdjustments.dll` | 0.1.6 |
 | 按键连点 | `Modules/KeyRepeater.dll` | 0.2.3 |
-| 成就追踪 | `Modules/AchievementTracker.dll` | 0.6.2 |
+| 成就追踪 | `Modules/AchievementTracker.dll` | 0.6.3 |
 
 清单中的路径、版本和 SHA256 与上述 DLL 对应。前四个模块的原有 `.cs` 文件保留，但不再作为在线下载文件；修复包未包含对应源码，因此这些旧源码不代表修复包 DLL 的完整实现。成就追踪的完整源码、构建工程和存储测试随本仓库保存。
 
@@ -37,6 +37,12 @@ https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHous
 模块源码统一放在 `Modules/`，版本文件固定使用根目录 `TreeHouseModules.json`。新增模块时在清单中追加条目，并填写发布文件（`.cs` 或 `.dll`）相对路径与实际文件的 SHA256。
 
 **版本规则：以后任何改动都必须递增涉及模块的版本号，同步构建产物、清单、SHA256 和相关说明，不得覆盖发布同版本的不同内容。
+
+### 成就追踪 0.6.3
+
+- 删除重复的 `/omni AchievementTracker overlay` 指令及提示，仅保留 `/omni 成就追踪悬浮窗`，用于切换游戏内成就追踪悬浮窗。
+- 中文指令继续接入现有 `/omni` 处理器；其他 Omni 输入交回原处理器，停用模块时恢复原处理器。
+- 使用 Omni 1.1.8.7 程序集完成 Release/x64 编译，24 项离线命令检查和 18 项角色存储检查通过。
 
 ### 成就追踪 0.6.2
 
