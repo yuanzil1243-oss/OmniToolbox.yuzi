@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Modules\NativeDragHotbarData.cs" Link="NativeDragHotbarData.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarExecution.cs" Link="NativeDragHotbarExecution.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarDrag.cs" Link="NativeDragHotbarDrag.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarInventory.cs" Link="NativeDragHotbarInventory.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarTransfer.cs" Link="NativeDragHotbarTransfer.cs" />
+    <Compile Include="..\..\Modules\NativeHotbarLayout.cs" Link="NativeHotbarLayout.cs" />
+  </ItemGroup>
+</Project>
