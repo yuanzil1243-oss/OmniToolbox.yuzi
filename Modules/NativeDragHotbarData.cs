@@ -161,7 +161,7 @@ internal static class HotbarRules
                 || bar.Name is null || bar.Name.Length > 128
                 || (profile.SchemaVersion == 1 ? !LegacyLayouts.Contains(bar.Columns) : !IsValidLayout(bar.Columns, bar.Rows))
                 || !float.IsFinite(bar.Scale) || bar.Scale is < 0.5f or > 2.5f
-                || !float.IsFinite(bar.Opacity) || bar.Opacity is < 0.1f or > 1
+                || !float.IsFinite(bar.Opacity) || bar.Opacity is < 0 or > 1
                 || !float.IsFinite(bar.X) || !float.IsFinite(bar.Y)
                 || (bar.AnchorX.HasValue != bar.AnchorY.HasValue)
                 || (bar.AnchorX is { } anchorX && (!float.IsFinite(anchorX) || anchorX is < 0 or > 1))

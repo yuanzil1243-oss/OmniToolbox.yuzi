@@ -29,6 +29,112 @@ try
         && HotbarRules.TryResolveBarSelector(profile.Bars, "#2 第二栏 面板", out barIndex) && barIndex == 1
         && !HotbarRules.TryResolveBarSelector(profile.Bars, "不存在", out _), "bar commands resolve ordinal and full custom names");
     profile.Bars.RemoveAt(1);
+    Check(HotbarPresentation.TryIconDirective("/micon 惊讶 emote\n/surprised motion\n/em 发现<t>！", out var directive)
+        && directive == new MacroIconDirective("惊讶", "emote"), "the user's micon emote example selects the native emote identity");
+    Check(HotbarPresentation.TryIconDirective("/macroicon \"Attack Name\" action", out directive)
+        && directive == new MacroIconDirective("Attack Name", "action"), "quoted macro icon names can contain spaces");
+    Check(HotbarPresentation.TryIconDirective("／MICON\t“惊讶”\tEMOTE", out directive)
+        && directive == new MacroIconDirective("惊讶", "emote"), "macro icons accept fullwidth slash, smart quotes, tabs and case variants");
+    Check(HotbarPresentation.TryIconDirective("/micon 技能名称", out directive) && directive.Category == "action",
+        "omitted macro icon category defaults to action");
+    Check(HotbarPresentation.TryIconDirective("/宏图标 惊讶 emote", out directive) && directive.Name == "惊讶",
+        "localized macro icon spelling is recognized");
+    Check(!HotbarPresentation.TryIconDirective("/echo /micon 惊讶 emote", out _)
+        && !HotbarPresentation.TryIconDirective("/micon", out _)
+        && !HotbarPresentation.TryIconDirective("/micon \"unfinished", out _),
+        "ordinary messages and incomplete macro icon directives cannot override icons");
+    Check(HotbarPresentation.TryIconDirective("/micon 惊讶 emote\n/micon 其他 emote", out directive) && directive.Name == "惊讶",
+        "the first macro icon directive determines the display");
+    var iconEntry = new HotbarEntry { Mode = HotbarEntryMode.Command, Command = "/micon 惊讶 emote", IconId = 123, IconOverride = true };
+    Check(HotbarPresentation.SelectIcon(iconEntry, 246201, 999) == 246201 && iconEntry.IconId == 123 && iconEntry.IconOverride,
+        "a resolved command icon outranks manual and native icons without overwriting the manual choice");
+    Check(HotbarPresentation.SelectIcon(iconEntry, 0, 999) == 123,
+        "removing or failing to resolve micon restores the manual icon");
+    iconEntry.IconOverride = false;
+    Check(HotbarPresentation.SelectIcon(iconEntry, 0, 999) == 999,
+        "native automatic icons follow command and manual icon priorities");
+    iconEntry.Mode = HotbarEntryMode.Native;
+    Check(HotbarPresentation.SelectIcon(iconEntry, 246201, 999) == 999,
+        "inactive custom commands cannot replace an active native-mode icon");
+    var fallback = new HotbarEntry { Mode = HotbarEntryMode.Command, Command = "/echo test" };
+    var randomCalls = 0;
+    Check(HotbarPresentation.EnsureFallbackIcon(fallback, 0, (min, max) =>
+        { randomCalls++; if (min != 234001 || max != 234064) throw new Exception("Wrong fallback range"); return max - 1; })
+        && fallback.IconId == 234063 && !fallback.IconOverride,
+        "iconless command entries receive a stored automatic icon from the requested inclusive range");
+    Check(!HotbarPresentation.EnsureFallbackIcon(fallback, 0, (min, max) => { randomCalls++; return min; }) && randomCalls == 1,
+        "the random automatic icon is assigned once instead of changing during redraw or save");
+    var emptyIcon = new HotbarEntry { Mode = HotbarEntryMode.Command, Command = "  " };
+    Check(!HotbarPresentation.EnsureFallbackIcon(emptyIcon, 0, (min, max) => min) && emptyIcon.IconId == 0,
+        "empty slots remain empty and never receive random icons");
+    var resolvedIcon = new HotbarEntry { Mode = HotbarEntryMode.Command, Command = "/micon 惊讶 emote" };
+    Check(!HotbarPresentation.EnsureFallbackIcon(resolvedIcon, 246201, (min, max) => min),
+        "a valid command icon does not require an unnecessary fallback assignment");
+    Check(HotbarRules.Commands("/micon 惊讶 emote\n/surprised motion\n/em 发现<t>！")
+        .Where(line => !HotbarPresentation.IsIconLine(line)).SequenceEqual(new[] { "/surprised motion", "/em 发现<t>！" }),
+        "icon metadata is consumed locally while the remaining macro commands retain order");
+    Check(HotbarPresentation.WithOpacity(0xCC123456, 0) == 0x00123456
+        && HotbarPresentation.WithOpacity(0xCC123456, 1) == 0xCC123456
+        && HotbarPresentation.WithOpacity(0xCC123456, 0.5f) == 0x66123456,
+        "opacity scales existing alpha to zero while preserving RGB and the original tint");
+    var transparentTints = HotbarPresentation.SlotTints(0, 1, 0xFF555555);
+    Check(transparentTints.Surface == 0x00161616 && transparentTints.Frame == 0x00555555,
+        "zero bar opacity hides the slot surface and frame");
+    Check(transparentTints.Image == 0xFFFFFFFF,
+        "icons remain fully visible at zero bar opacity");
+    var halfTints = HotbarPresentation.SlotTints(0.5f, 1, 0xFF555555);
+    Check(halfTints.Image == transparentTints.Image
+        && halfTints.Surface == 0x66161616 && halfTints.Frame == 0x80555555,
+        "changing bar opacity only changes the slot surface and border");
+    var themeTints = HotbarPresentation.SlotTints(0.5f, 0.5f, 0xFF555555);
+    Check(themeTints.Image == 0x80FFFFFF && themeTints.Surface == 0x33161616,
+        "icon tint still respects the host theme alpha independently of bar opacity");
+    Check(HotbarPresentation.EditorShade(false) == 0 && HotbarPresentation.EditorShade(true) == 0x2E000000,
+        "the editor receives a light black dim layer only while replacement is pending");
+    Check(HotbarPresentation.ReplacementCenter(true, new(100, 200), new(500, 800), new(0, 0), new(1920, 1080)) == new System.Numerics.Vector2(300, 500)
+        && HotbarPresentation.ReplacementCenter(false, new(100, 200), new(500, 800), new(100, 50), new(1000, 700)) == new System.Numerics.Vector2(600, 400),
+        "replacement confirmation follows the editor center with a viewport-center fallback");
+    var visibility = new HotbarProfile { Owner = owner.ToString("X16") };
+    visibility.Bars.Add(new() { Name = "第二栏 面板" });
+    Check(HotbarVisibilityCommands.TryParse("show", out var visibilityAction, out var selector)
+        && visibilityAction == HotbarVisibilityAction.Toggle && selector == ""
+        && HotbarVisibilityCommands.Apply(visibility, visibilityAction, selector, out _) && !visibility.Show,
+        "the previously advertised show command now hides an already visible overlay");
+    Check(HotbarVisibilityCommands.Apply(visibility, visibilityAction, selector, out _) && visibility.Show,
+        "repeating the show alias restores the overlay");
+    Check(HotbarVisibilityCommands.TryParse("TOGGLE\t#2", out visibilityAction, out selector)
+        && HotbarVisibilityCommands.Apply(visibility, visibilityAction, selector, out var selectedBar) && selectedBar == 1 && !visibility.Bars[1].Visible,
+        "standalone and routed visibility arguments support tabs and ordinal selectors");
+    Check(HotbarVisibilityCommands.TryParse("toggle \"第二栏 面板\"", out visibilityAction, out selector)
+        && HotbarVisibilityCommands.Apply(visibility, visibilityAction, selector, out selectedBar) && selectedBar == 1 && visibility.Bars[1].Visible,
+        "quoted full names resolve and toggle the intended bar");
+    visibility.Show = false;
+    Check(HotbarVisibilityCommands.Apply(visibility, HotbarVisibilityAction.Toggle, "#2", out _) && visibility.Show && visibility.Bars[1].Visible,
+        "toggling a bar hidden by the global switch makes it actually visible");
+    visibility.Bars.ForEach(bar => bar.Visible = false);
+    Check(HotbarVisibilityCommands.Apply(visibility, HotbarVisibilityAction.Toggle, "", out _) && visibility.Show && visibility.Bars.All(bar => bar.Visible),
+        "global toggle can recover when every individual bar was hidden");
+    Check(!HotbarVisibilityCommands.TryParse("invalid #1", out _, out _)
+        && !HotbarVisibilityCommands.Apply(visibility, HotbarVisibilityAction.Hide, "unknown", out _) && visibility.Show,
+        "invalid visibility commands leave existing state untouched");
+    Check(HotbarVisibilityCommands.TryParse("on #1", out visibilityAction, out selector) && visibilityAction == HotbarVisibilityAction.Show
+        && HotbarVisibilityCommands.Apply(true, visibilityAction)
+        && HotbarVisibilityCommands.TryParse("off", out visibilityAction, out _) && !HotbarVisibilityCommands.Apply(true, visibilityAction),
+        "on and hide/off retain explicit show and hide behavior");
+    var transparent = new HotbarProfile { Owner = owner.ToString("X16") };
+    transparent.Bars[0].Opacity = 0;
+    transparent.Bars[0].Slots[0] = fallback.Copy();
+    var transparentPath = Path.Combine(temp, "transparent.json");
+    HotbarProfileStore.Save(transparentPath, transparent, owner, false);
+    var transparentReload = HotbarProfileStore.Load(transparentPath, owner, out _);
+    var transparentShare = HotbarTransfer.Parse(HotbarTransfer.Export(transparentReload, null, true, "1.1.0"));
+    Check(transparentShare.Bars[0].Opacity == 0 && transparentShare.Bars[0].Slots[0].IconId == 234063
+        && !transparentShare.Bars[0].Slots[0].IconOverride,
+        "zero opacity and a stable automatic icon survive save/reload and settings transfer");
+    transparent.Bars[0].Opacity = -0.01f;
+    Reject(() => HotbarRules.Validate(transparent, owner), "negative opacity remains invalid");
+    transparent.Bars[0].Opacity = 1.01f;
+    Reject(() => HotbarRules.Validate(transparent, owner), "opacity above one remains invalid");
     var migrated = NativeHotbarLayout.ResolvePosition(300, 200, null, null, new(100, 50), new(1000, 700), new(200, 100), out var ax, out var ay);
     Check(migrated == new System.Numerics.Vector2(300, 200) && Math.Abs(ax - 0.25f) < 0.001f && Math.Abs(ay - 0.25f) < 0.001f,
         "legacy absolute positions migrate to viewport-relative anchors");
@@ -99,7 +205,7 @@ try
             $"migration {legacyColumns} persists the new schema while backing up the original profile");
     }
 
-    var shareText = HotbarTransfer.Export(layoutProfile, 0, true, "1.0.0");
+    var shareText = HotbarTransfer.Export(layoutProfile, 0, true, "1.1.0");
     var shared = HotbarTransfer.Parse(shareText);
     Check(!shareText.Contains("\"Owner\"") && shared.Bars.Count == 1
         && !shared.ShowAllBars.HasValue && !shared.ShowHelp.HasValue,
@@ -108,7 +214,7 @@ try
         && shared.Bars[0].Slots[23].Command == "/echo 隐藏格" && shared.Bars[0].AnchorX == 0.75f,
         "bar export round-trips its active layout, hidden contents and position anchors");
     layoutProfile.Show = false;
-    var allShared = HotbarTransfer.Parse(HotbarTransfer.Export(layoutProfile, null, false, "1.0.0"));
+    var allShared = HotbarTransfer.Parse(HotbarTransfer.Export(layoutProfile, null, false, "1.1.0"));
     Check(allShared.ShowAllBars == false && allShared.ShowHelp == false,
         "all-settings export includes the global visibility and operation-help preferences");
     var destinationProfile = new HotbarProfile { Owner = (owner + 1).ToString("X16") };
@@ -151,13 +257,13 @@ try
     HotbarProfileStore.Save(importedPath, destinationProfile, owner + 1, false);
     Check(HotbarProfileStore.Load(importedPath, owner + 1, out _).Bars[1].Slots[23].Command == "/echo 隐藏格",
         "imported hidden commands persist under the destination character");
-    var multiBarExport = HotbarTransfer.Parse(HotbarTransfer.Export(destinationProfile, null, true, "1.0.0"));
+    var multiBarExport = HotbarTransfer.Parse(HotbarTransfer.Export(destinationProfile, null, true, "1.1.0"));
     Check(multiBarExport.Bars.Count == 3 && multiBarExport.Bars[2].Slots[23].Command == "/echo 隐藏格",
         "all-settings export round-trips multiple bars and their hidden entries");
     HotbarRules.Resize(layoutReload.Bars[0], 10, 12);
     layoutReload.Bars[0].Slots[119] = new() { NativeType = 2, NativeId = 1004551, Name = "第120格 HQ物品" };
     HotbarRules.Resize(layoutReload.Bars[0], 1, 1);
-    var maximumShare = HotbarTransfer.Parse(HotbarTransfer.Export(layoutReload, 0, true, "1.0.0"));
+    var maximumShare = HotbarTransfer.Parse(HotbarTransfer.Export(layoutReload, 0, true, "1.1.0"));
     Check(maximumShare.Bars[0].SlotCount == 1 && maximumShare.Bars[0].Slots.Count == 120
         && maximumShare.Bars[0].Slots[119].NativeId == 1004551,
         "the 120th slot and its HQ identity survive shrinking to one slot and transfer");
@@ -349,9 +455,9 @@ try
     var localization = type.GetProperty("Localization")!.GetValue(module)!;
     Check(info is not null && localization is not null, "compiled module instantiates and constructs localization without game services");
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 0, 0, 0)
-        && version.FileVersion == "1.0.0.0" && version.ProductVersion == "1.0.0"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.0.0", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 0, 0)
+        && version.FileVersion == "1.1.0.0" && version.ProductVersion == "1.1.0"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.0", "module, assembly identity, assembly version and file version agree");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
     context.Unload();
     Console.WriteLine($"{checks} checks passed. Native game interaction still requires in-game testing.");

@@ -22,9 +22,9 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
-        Author = "Yuzi", Commands = [new("ToggleCommand", "/draghotbar show")] };
+        Author = "Yuzi", Commands = [new("ToggleCommand", "/draghotbar toggle")] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {
         ["Title"] = "拖放热键栏",
@@ -87,6 +87,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
         ["Icon"] = "图标 ID",
         ["PickIcon"] = "选择图标…",
         ["RestoreIcon"] = "恢复原生图标",
+        ["IconPriority"] = "图标优先级：/micon 指令 ＞ 自主选择 ＞ 原生或自动图标。纯指令且无图标时自动分配默认图标。",
         ["Tooltip"] = "悬浮说明",
         ["CommandHelp"] = "保留的原生动作会先执行；下面每行一条附加游戏或插件指令，按顺序立即发送，不实现宏等待。",
         ["NativePreserved"] = "保留并先执行原生动作：{0}（类型 {1} · ID {2}）",
@@ -99,7 +100,11 @@ public sealed class NativeDragHotbar : OmniModuleBase
         ["Unsupported"] = "此拖动来源暂不支持。可先放入游戏原生热键栏，再从原生栏拖入。",
         ["NativeError"] = "原生拖入或执行失败，详情见日志。",
         ["Copied"] = "已放入：{0}",
-        ["CommandUsage"] = "用法：/draghotbar show|hide|toggle [#序号|栏名称]",
+        ["CommandUsage"] = "用法：/draghotbar toggle [#序号|栏名称]；show 同样切换，on 显示，hide/off 隐藏。",
+        ["CommandUnavailable"] = "请登录角色并确认配置可读后再切换热键栏。",
+        ["VisibilityChanged"] = "{0}：{1}",
+        ["Shown"] = "显示",
+        ["Hidden"] = "隐藏",
         ["InvalidBar"] = "找不到唯一匹配的热键栏：{0}",
         ["Diagnostics"] = "最近的原生拖动：{0}",
     });
@@ -113,6 +118,8 @@ public sealed class NativeDragHotbar : OmniModuleBase
     private long noticeUntil;
     private int selected;
     private NativeHotbarBridge? bridge;
+    private readonly NativeHotbarMacroIcons macroIcons = new();
+    private bool iconWarningLogged;
     private readonly List<DropArea> targets = [];
     private Vector2 cursorOffset;
     private long targetsAt;
@@ -197,7 +204,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
         activation.OnStopping(() => ui.Draw -= Draw);
         ui.Draw += Draw;
         var command = new CommandInfo((_, argument) => { if (!TryHandleCommand(argument)) DalamudServices.ChatGUI.Print(L("CommandUsage")); })
-            { HelpMessage = L("CommandUsage") };
+            { HelpMessage = L("CommandUsage"), AllowedInMacros = true };
         if (!DalamudServices.CommandManager.AddHandler("/draghotbar", command))
             throw new InvalidOperationException("/draghotbar 已由其他插件注册。");
         activation.OnStopping(() =>
@@ -212,22 +219,14 @@ public sealed class NativeDragHotbar : OmniModuleBase
 
     public override bool TryHandleCommand(string arguments)
     {
-        var parts = arguments.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-        var action = parts.Length == 0 ? "toggle" : parts[0].ToLowerInvariant();
-        if (action is not ("toggle" or "show" or "hide")) return false;
+        if (!HotbarVisibilityCommands.TryParse(arguments, out var action, out var selector)) return false;
         EnsureProfile();
-        if (owner == 0 || readOnly) return true;
-        if (parts.Length > 1)
-        {
-            var selector = parts[1].Trim();
-            if (!HotbarRules.TryResolveBarSelector(profile.Bars, selector, out var index))
-            { DalamudServices.ChatGUI.Print(L("InvalidBar", selector)); return true; }
-            var bar = profile.Bars[index];
-            bar.Visible = action switch { "show" => true, "hide" => false, _ => !bar.Visible };
-            if (bar.Visible) profile.Show = true;
-            dirty = true; Save(); return true;
-        }
-        profile.Show = action switch { "show" => true, "hide" => false, _ => !profile.Show };
+        if (owner == 0 || readOnly) { DalamudServices.ChatGUI.Print(L("CommandUnavailable")); return true; }
+        if (!HotbarVisibilityCommands.Apply(profile, action, selector, out var index))
+        { DalamudServices.ChatGUI.Print(L("InvalidBar", selector)); return true; }
+        var visible = profile.Show && (index < 0 || profile.Bars[index].Visible);
+        DalamudServices.ChatGUI.Print(L("VisibilityChanged", index < 0 ? L("Show") : BarLabel(profile.Bars[index]),
+            L(visible ? "Shown" : "Hidden")));
         dirty = true; Save(); return true;
     }
 
@@ -244,18 +243,45 @@ public sealed class NativeDragHotbar : OmniModuleBase
         pendingImport = null; importOwner = 0; layoutBarId = "";
         profile = new() { Owner = id.ToString("X16") };
         if (id == 0) return;
-        try { profile = HotbarProfileStore.Load(ProfilePath, owner, out recovering); dirty = profile.NeedsUpgradeSave; }
+        try { profile = HotbarProfileStore.Load(ProfilePath, owner, out recovering); dirty = profile.NeedsUpgradeSave | PrepareEntryIcons(); }
         catch (Exception error) { readOnly = true; DalamudServices.PluginLog.Error(error, "拖放热键栏：角色配置加载失败"); }
     }
 
     private void Save()
     {
         if (!dirty || owner == 0 || readOnly) return;
+        PrepareEntryIcons();
         try { HotbarProfileStore.Save(ProfilePath, profile, owner, recovering); dirty = false; recovering = false; saveError = ""; }
         catch (Exception error) { saveError = error.Message; DalamudServices.PluginLog.Error(error, "拖放热键栏：配置保存失败"); }
     }
 
     private void Notify(string value) { notice = value; noticeUntil = Environment.TickCount64 + 4500; }
+
+    private uint ResolveIcon(HotbarEntry entry)
+    {
+        uint commandIcon = 0;
+        if (entry.Mode == HotbarEntryMode.Command)
+        {
+            try { commandIcon = macroIcons.Resolve(entry.Command, bridge); }
+            catch (Exception error)
+            {
+                if (!iconWarningLogged) DalamudServices.PluginLog.Warning(error, "拖放热键栏：宏图标解析失败，使用备用图标");
+                iconWarningLogged = true;
+            }
+        }
+        var nativeIcon = entry.HasNative && bridge is not null && !entry.IconOverride ? bridge.CurrentIcon(entry) : 0;
+        return HotbarPresentation.SelectIcon(entry, commandIcon, nativeIcon);
+    }
+
+    private bool PrepareEntryIcons()
+    {
+        var changed = false;
+        foreach (var bar in profile.Bars)
+            foreach (var entry in bar.Slots)
+                if (entry.Mode == HotbarEntryMode.Command && entry.IconId == 0 && entry.Command.Length > 0)
+                    changed |= HotbarPresentation.EnsureFallbackIcon(entry, ResolveIcon(entry), Random.Shared.Next);
+        return changed;
+    }
 
     public override bool DrawSettings()
     {
@@ -395,7 +421,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
         ImGui.AlignTextToFramePadding(); ImGui.TextUnformatted(L("Opacity")); ImGui.SameLine();
         ImGui.SetNextItemWidth(Math.Max(80, ImGui.GetContentRegionAvail().X));
         var opacity = bar.Opacity;
-        if (ImGui.SliderFloat("##NDHOpacity", ref opacity, 0.1f, 1f, "%.2f")) { bar.Opacity = opacity; dirty = true; }
+        if (ImGui.SliderFloat("##NDHOpacity", ref opacity, 0f, 1f, "%.2f")) { bar.Opacity = opacity; dirty = true; }
         ImGui.AlignTextToFramePadding(); ImGui.TextUnformatted(L("Scale")); ImGui.SameLine();
         ImGui.SetNextItemWidth(Math.Max(80, ImGui.GetContentRegionAvail().X));
         var scale = bar.Scale;
@@ -498,7 +524,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
         var view = ImGui.GetMainViewport();
         var expected = BarSize(bar);
         var hadAnchor = bar.AnchorX.HasValue && bar.AnchorY.HasValue;
-        if (ReferenceEquals(movingBar, bar) && !nativeDragging && ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        if (replacing is null && ReferenceEquals(movingBar, bar) && !nativeDragging && ImGui.IsMouseDown(ImGuiMouseButton.Left))
         {
             var moved = NativeHotbarLayout.SetPosition(new Vector2(bar.X, bar.Y) + ImGui.GetIO().MouseDelta,
                 view.WorkPos, view.WorkSize, expected, out var movedAnchorX, out var movedAnchorY);
@@ -511,29 +537,37 @@ public sealed class NativeDragHotbar : OmniModuleBase
         if (!hadAnchor) dirty = true;
         bar.AnchorX = anchorX; bar.AnchorY = anchorY;
         ImGui.SetNextWindowPos(pos, forcePosition ? ImGuiCond.Always : ImGuiCond.Appearing);
+        // Keep the window active at zero opacity so its fully visible icons remain clickable.
         ImGui.SetNextWindowBgAlpha(bar.Opacity);
+        var windowBorder = ImGui.GetStyle().Colors[(int)ImGuiCol.Border];
+        windowBorder.W *= bar.Opacity;
+        ImGui.PushStyleColor(ImGuiCol.Border, windowBorder);
         var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.AlwaysAutoResize
             | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoFocusOnAppearing
             | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove;
-        if (ImGui.Begin(BarLabel(bar) + "###NativeDragHotbar-" + bar.Id, flags))
+        var drawContents = ImGui.Begin(BarLabel(bar) + "###NativeDragHotbar-" + bar.Id, flags);
+        try
         {
-            if (!nativeDragging && ImGui.GetIO().KeyAlt
-                && ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem) && ImGui.IsMouseClicked(ImGuiMouseButton.Left)) movingBar = bar;
-            var position = ImGui.GetWindowPos();
-            if (Vector2.DistanceSquared(position, new(bar.X, bar.Y)) > 0.1f)
-            { bar.X = position.X; bar.Y = position.Y; bar.AnchorX = anchorX; bar.AnchorY = anchorY; dirty = true; }
-            var visible = 0;
-            var size = Math.Clamp(40f * bar.Scale * ImGui.GetIO().FontGlobalScale, 20, 120);
-            for (var i = 0; i < bar.SlotCount; i++)
+            if (drawContents)
             {
-                if (bar.HideEmpty && !nativeDragging && localDragBar is null && bar.Slots[i].IsEmpty) continue;
-                if (visible++ % bar.Columns != 0) ImGui.SameLine(0, 4);
-                DrawSlot(bar, i, size, nativeDragging, supported);
+                if (replacing is null && !nativeDragging && ImGui.GetIO().KeyAlt
+                    && ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem) && ImGui.IsMouseClicked(ImGuiMouseButton.Left)) movingBar = bar;
+                var position = ImGui.GetWindowPos();
+                if (Vector2.DistanceSquared(position, new(bar.X, bar.Y)) > 0.1f)
+                { bar.X = position.X; bar.Y = position.Y; bar.AnchorX = anchorX; bar.AnchorY = anchorY; dirty = true; }
+                var visible = 0;
+                var size = Math.Clamp(40f * bar.Scale * ImGui.GetIO().FontGlobalScale, 20, 120);
+                for (var i = 0; i < bar.SlotCount; i++)
+                {
+                    if (bar.HideEmpty && !nativeDragging && localDragBar is null && bar.Slots[i].IsEmpty) continue;
+                    if (visible++ % bar.Columns != 0) ImGui.SameLine(0, 4);
+                    DrawSlot(bar, i, size, nativeDragging, supported);
+                }
+                if (visible == 0) ImGui.TextDisabled(L("Empty"));
+                if (noticeUntil > Environment.TickCount64) ImGui.TextWrapped(notice);
             }
-            if (visible == 0) ImGui.TextDisabled(L("Empty"));
-            if (noticeUntil > Environment.TickCount64) ImGui.TextWrapped(notice);
         }
-        ImGui.End();
+        finally { ImGui.End(); ImGui.PopStyleColor(); }
     }
 
     private static Vector2 BarSize(DragHotbar bar)
@@ -550,13 +584,14 @@ public sealed class NativeDragHotbar : OmniModuleBase
         var clicked = ImGui.InvisibleButton("##slot", new(size));
         var hovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
         var list = ImGui.GetWindowDrawList();
-        list.AddRectFilled(min, max, 0xCC161616, 3);
-        var icon = entry.IconId;
-        if (entry.Mode == HotbarEntryMode.Native && entry.HasNative && !entry.IconOverride && bridge is not null) icon = bridge.CurrentIcon(entry);
+        var border = hovered ? (nativeDragging ? (supported ? 0xFF6EE6A5u : 0xFF6B6BEEu) : 0xFFDDDDDDu) : 0xFF555555u;
+        var tints = HotbarPresentation.SlotTints(bar.Opacity, ImGui.GetStyle().Alpha, border);
+        list.AddRectFilled(min, max, tints.Surface, 3);
+        var icon = ResolveIcon(entry);
         if (icon > 0 && ImageHelper.GetGameIcon(icon) is { } texture)
-            list.AddImage(texture.Handle, min + new Vector2(1), max - new Vector2(1));
-        list.AddRect(min, max, hovered ? (nativeDragging ? (supported ? 0xFF6EE6A5 : 0xFF6B6BEE) : 0xFFDDDDDD) : 0xFF555555, 3, ImDrawFlags.None, hovered ? 2 : 1);
-        if (entry.Mode == HotbarEntryMode.Command && !entry.IsEmpty) list.AddText(max - new Vector2(14, 18), 0xFF5BDFFF, "C");
+            list.AddImage(texture.Handle, min + new Vector2(1), max - new Vector2(1), Vector2.Zero, Vector2.One,
+                tints.Image);
+        list.AddRect(min, max, tints.Frame, 3, ImDrawFlags.None, hovered ? 2 : 1);
         if (replacing is null)
             targets.Add(new(bar, index, min, max, entry));
         if (hovered && !nativeDragging && localDragBar is null)
@@ -567,14 +602,14 @@ public sealed class NativeDragHotbar : OmniModuleBase
             if (entry.Mode == HotbarEntryMode.Command && entry.Command.Length > 0) ImGui.TextUnformatted(entry.Command);
             ImGui.EndTooltip();
         }
-        if (hovered && ImGui.IsMouseReleased(ImGuiMouseButton.Right) && !nativeHotbarLocked && !nativeDragging) OpenEditor(bar, index);
-        if (!nativeHotbarLocked && !nativeDragging && !ImGui.GetIO().KeyAlt && movingBar is null && ImGui.BeginDragDropSource())
+        if (replacing is null && hovered && ImGui.IsMouseReleased(ImGuiMouseButton.Right) && !nativeHotbarLocked && !nativeDragging) OpenEditor(bar, index);
+        if (replacing is null && !nativeHotbarLocked && !nativeDragging && !ImGui.GetIO().KeyAlt && movingBar is null && ImGui.BeginDragDropSource())
         {
             if (ImGui.SetDragDropPayload("NDH_LOCAL_SLOT", [])) { localDragBar = bar; localDragIndex = index; }
             ImGui.TextUnformatted(entry.Name.Length > 0 ? entry.Name : L("Slot", index + 1));
             ImGui.EndDragDropSource();
         }
-        if (!nativeHotbarLocked && !nativeDragging && ImGui.BeginDragDropTarget())
+        if (replacing is null && !nativeHotbarLocked && !nativeDragging && ImGui.BeginDragDropTarget())
         {
             var payload = ImGui.AcceptDragDropPayload("NDH_LOCAL_SLOT");
             if (!payload.IsNull && localDragBar is not null && localDragIndex >= 0 && !nativeHotbarLocked
@@ -668,10 +703,17 @@ public sealed class NativeDragHotbar : OmniModuleBase
     private void DrawReplacement()
     {
         if (replacing is null) return;
+        if (!ValidRequest(replacing)) { replacing = null; return; }
         using var theme = new OmniGlassStyleScope();
         var open = true;
+        var viewport = ImGui.GetMainViewport();
+        ImGui.SetNextWindowPos(HotbarPresentation.ReplacementCenter(editorVisible, editorMin, editorMax,
+            viewport.WorkPos, viewport.WorkSize), ImGuiCond.Always, new Vector2(0.5f));
         ImGui.SetNextWindowSize(new(380, 0), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin(L("ReplaceTitle"), ref open, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse))
+        // The editor is input-blocked while this request is pending. Focus also brings this window
+        // to the display front each frame instead of relying on draw submission order alone.
+        ImGui.SetNextWindowFocus();
+        if (ImGui.Begin(L("ReplaceTitle"), ref open, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoMove))
         {
             ImGui.TextWrapped(L("ReplaceText", replacing.Before.Name, replacing.Entry.Name));
             if (ImGui.Button(L("Replace"))) { ApplyDrop(replacing); replacing = null; }
@@ -691,7 +733,9 @@ public sealed class NativeDragHotbar : OmniModuleBase
         using var theme = new OmniGlassStyleScope();
         ImGui.SetNextWindowSize(new(500, 420), ImGuiCond.FirstUseEver);
         var open = true;
-        if (ImGui.Begin(L("Editor"), ref open, ImGuiWindowFlags.NoCollapse))
+        var editorFlags = ImGuiWindowFlags.NoCollapse;
+        if (replacing is not null) editorFlags |= ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize;
+        if (ImGui.Begin(L("Editor"), ref open, editorFlags))
         {
             editorVisible = true;
             editorMin = ImGui.GetWindowPos(); editorMax = editorMin + ImGui.GetWindowSize();
@@ -704,7 +748,8 @@ public sealed class NativeDragHotbar : OmniModuleBase
             drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.FrameBg), 4);
             drawList.AddRect(min, max, ImGui.GetColorU32(ImGuiCol.Border), 4);
             var textAt = min + new Vector2(8, 8);
-            if (draft.IconId > 0 && ImageHelper.GetGameIcon(draft.IconId) is { } previewTexture)
+            var previewIcon = ResolveIcon(draft);
+            if (previewIcon > 0 && ImageHelper.GetGameIcon(previewIcon) is { } previewTexture)
             {
                 var iconSize = new Vector2(dropSize.Y - 8);
                 drawList.AddImage(previewTexture.Handle, min + new Vector2(4), min + new Vector2(4) + iconSize);
@@ -725,7 +770,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
             var name = draft.Name; if (ImGui.InputText(L("Name"), ref name, 256)) draft.Name = name;
             var tooltip = draft.Tooltip; if (ImGui.InputText(L("Tooltip"), ref tooltip, 1024)) draft.Tooltip = tooltip;
             var icon = (int)draft.IconId;
-            if (ImGui.InputInt(L("Icon"), ref icon)) { draft.IconId = (uint)Math.Clamp(icon, 0, 10_000_000); draft.IconOverride = true; }
+            if (ImGui.InputInt(L("Icon"), ref icon)) { draft.IconId = (uint)Math.Clamp(icon, 0, 10_000_000); draft.IconOverride = draft.IconId > 0; }
             if (ImGui.Button(L("PickIcon")))
             {
                 var edited = draft;
@@ -733,6 +778,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
             }
             if (draft.HasNative)
             { ImGui.SameLine(); if (ImGui.Button(L("RestoreIcon"))) { draft.IconId = bridge?.CurrentIcon(draft) ?? draft.IconId; draft.IconOverride = false; } }
+            ImGui.TextWrapped(L("IconPriority"));
             if (draft.Mode == HotbarEntryMode.Command)
             {
                 ImGui.TextWrapped(L("CommandHelp"));
@@ -764,6 +810,9 @@ public sealed class NativeDragHotbar : OmniModuleBase
                 CloseEditor();
             }
             ImGui.EndDisabled();
+            var shade = HotbarPresentation.EditorShade(replacing is not null);
+            if (shade != 0)
+                ImGui.GetWindowDrawList().AddRectFilled(editorMin, editorMax, shade, ImGui.GetStyle().WindowRounding);
         }
         ImGui.End(); if (!open) CloseEditor();
     }
@@ -787,7 +836,10 @@ public sealed class NativeDragHotbar : OmniModuleBase
             if (entry.HasNative) bridge?.Execute(entry);
             if (entry.Mode == HotbarEntryMode.Command)
                 foreach (var command in HotbarRules.Commands(entry.Command))
+                {
+                    if (HotbarPresentation.IsIconLine(command)) continue;
                     if (!DalamudServices.CommandManager.ProcessCommand(command)) ChatManager.Instance().SendMessage(command);
+                }
         }
         catch (Exception error) { DalamudServices.PluginLog.Error(error, "拖放热键栏：执行失败"); Notify(L("NativeError")); }
     }

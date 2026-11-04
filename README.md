@@ -11,7 +11,7 @@ Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 | 极限技调整 | `Modules/LimitBreakAdjustments.dll` | 0.1.6 |
 | 按键连点 | `Modules/KeyRepeater.dll` | 0.2.3 |
 | 成就追踪 | `Modules/AchievementTracker.dll` | 0.6.3 |
-| 拖放热键栏 | `Modules/NativeDragHotbar.dll` | 1.0.0 |
+| 拖放热键栏 | `Modules/NativeDragHotbar.dll` | 1.1.0 |
 
 清单中的路径、版本和 SHA256 与上述 DLL 对应。前四个模块的原有 `.cs` 文件保留，但不再作为在线下载文件；修复包未包含对应源码，因此这些旧源码不代表修复包 DLL 的完整实现。成就追踪的完整源码、构建工程和存储测试随本仓库保存。
 
@@ -40,6 +40,16 @@ https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHous
 模块源码统一放在 `Modules/`，版本文件固定使用根目录 `TreeHouseModules.json`。新增模块时在清单中追加条目，并填写发布文件（`.cs` 或 `.dll`）相对路径与实际文件的 SHA256。
 
 **版本规则：以后任何改动都必须递增涉及模块的版本号，同步构建产物、清单、SHA256 和相关说明，不得覆盖发布同版本的不同内容。
+
+### 拖放热键栏 1.1.0
+
+- 支持 `/micon 惊讶 emote` 等图标指令；图标优先级为指令设置、自主选择、原生或自动设置，移除指令图标后恢复手选图标。
+- 纯指令且无可用图标的格子，从 234001—234063 随机分配图标并保存，重新登录或导入导出不重抽。
+- 修复热键栏显示切换：`/draghotbar toggle` 和旧的 `show` 均可切换，支持 #编号、完整名称，提供 `on` 显示及 `hide/off` 隐藏。
+- 不透明度支持 0—1，仅影响背景、格子底色和边框；图标不受该滑块影响，背景全透明时仍可操作图标。
+- 替换确认窗保持居中并持续置于编辑窗上方；确认期间仅压暗编辑窗、暂停其输入，结束后恢复。
+- 移除自定义指令格右下角的 C 标记。
+- 144 项离线检查通过；实际程序集和文件版本为 1.1.0.0，最低 Omni 1.1.8.9、API 1。完整说明见 [NativeDragHotbar-1.1.0](docs/NativeDragHotbar-1.1.0.md)。
 
 ### 拖放热键栏 1.0.0
 

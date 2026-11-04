@@ -11,6 +11,7 @@
     <Compile Include="..\..\Modules\NativeDragHotbarDrag.cs" Link="NativeDragHotbarDrag.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarInventory.cs" Link="NativeDragHotbarInventory.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarTransfer.cs" Link="NativeDragHotbarTransfer.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarPresentation.cs" Link="NativeDragHotbarPresentation.cs" />
     <Compile Include="..\..\Modules\NativeHotbarLayout.cs" Link="NativeHotbarLayout.cs" />
   </ItemGroup>
 </Project>
