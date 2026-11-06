@@ -680,6 +680,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
                     candidate.PlaceName.ValueNullable?.Name.ToString() ?? ""))
                 .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Area)
                     && MatchesSearch(query, candidate.Row.RowId, candidate.Group, candidate.Area))
+                .OrderByDescending(candidate => goal.Regions.Any(region => region.Id == (int)candidate.Row.RowId))
                 .ToList()
             : new List<TerritorySearchResult>();
         var childHeight = popupOpen ? SearchResultsHeight(matches.Count, 240) : 240;
@@ -687,11 +688,13 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
         ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(360, 120), new System.Numerics.Vector2(700, 520));
         if (ImGui.BeginPopup(popupId))
         {
+            var resetResultsScroll = ImGui.IsWindowAppearing();
             ImGui.SetNextItemWidth(-1);
             ImGui.InputTextWithHint("##territory-search", L("SearchTerritory"), ref query, 128);
             territorySearch[index] = query ?? "";
             if (ImGui.BeginChild("##territory-results", new System.Numerics.Vector2(-1, childHeight), false))
             {
+                if (resetResultsScroll) ImGui.SetScrollY(0);
                 if (ImGui.BeginTable("##territory-result-table", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
                 {
                     ImGui.TableSetupColumn(L("Select"), ImGuiTableColumnFlags.WidthFixed, 48);
@@ -981,14 +984,26 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     private void DrawOverlay()
     {
         if (activeContentId == 0 || !profile.ShowOverlay) return;
-        ImGui.SetNextWindowBgAlpha(profile.Opacity);
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(380, 360), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowSizeConstraints(
-            new System.Numerics.Vector2(280, 120),
-            new System.Numerics.Vector2(480, 720));
-        var flags = ImGuiWindowFlags.NoTitleBar;
-        if (!ImGui.Begin("##AchievementTrackerOverlay", flags)) { ImGui.End(); return; }
-        ImGui.TextUnformatted(L("TrackedAchievements"));
+        // Open the window only when a goal survives every existing display filter.
+        // Keep ShowOverlay enabled so entering a matching territory restores it automatically.
+        var windowStarted = false;
+        bool TryBeginOverlay()
+        {
+            if (windowStarted) return true;
+            ImGui.SetNextWindowBgAlpha(profile.Opacity);
+            ImGui.SetNextWindowSize(new System.Numerics.Vector2(380, 360), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSizeConstraints(
+                new System.Numerics.Vector2(280, 120),
+                new System.Numerics.Vector2(480, 720));
+            if (!ImGui.Begin("##AchievementTrackerOverlay", ImGuiWindowFlags.NoTitleBar))
+            {
+                ImGui.End();
+                return false;
+            }
+            windowStarted = true;
+            ImGui.TextUnformatted(L("TrackedAchievements"));
+            return true;
+        }
         foreach (var goal in profile.Goals)
         {
             MigrateLegacyRegion(goal);
@@ -999,6 +1014,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
             if (!goal.Enabled || !regionAllowed) continue;
             if (goal.Id <= 0)
             {
+                if (!TryBeginOverlay()) return;
                 ImGui.Separator();
                 ImGui.TextUnformatted(string.IsNullOrWhiteSpace(goal.Name) ? L("NoAchievement") : goal.Name);
                 ImGui.TextDisabled(L("UnmatchedGoal"));
@@ -1021,6 +1037,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
                 ? IsAchievementComplete((uint)goal.Id)
                 : hasProgressCounter && state.Current >= state.Max;
             if (!goal.ShowCompleted && completed) continue;
+            if (!TryBeginOverlay()) return;
             ImGui.Separator();
             ImGui.TextUnformatted(row.HasValue ? row.Value.Name.ToString() : (string.IsNullOrWhiteSpace(goal.Name) ? L("InvalidAchievementID", goal.Id) : goal.Name));
             if (!string.IsNullOrWhiteSpace(goal.Note))
@@ -1073,7 +1090,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
             ImGui.ProgressBar(ratio, new System.Numerics.Vector2(-1, 0), $"{state.Current} / {state.Max} ({ratio:P0})");
             DrawAchievementStatus(completed);
         }
-        ImGui.End();
+        if (windowStarted) ImGui.End();
     }
 
     private static bool IsAchievementPrerequisiteDescription(string description)
