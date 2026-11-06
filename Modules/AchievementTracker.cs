@@ -83,7 +83,7 @@ public sealed unsafe class AchievementTracker : OmniModuleBase
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {
         ["Title"] = "成就追踪",
-        ["Description"] = "读取游戏原生成就进度，按角色保存追踪目标与显示设置。",
+        ["Description"] = "读取游戏原生成就进度。在成就界面右键选择「加入目标列表」即可自动同步至本模块，追踪目标与显示设置按角色保存。",
         ["ToggleOverlayAliasCommand"] = "打开或关闭游戏内成就追踪悬浮窗",
         ["NewCharacterDefaults"] = "新角色默认设置",
         ["DefaultShowOverlay"] = "新角色默认显示悬浮窗",

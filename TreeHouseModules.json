@@ -69,15 +69,15 @@
       "InternalName": "AchievementTracker",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.6.3",
+      "Version": "1.0.0",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.6",
       "File": "Modules/AchievementTracker.dll",
-      "Sha256": "FB605C2F1970218E4F0CCF04169D5C0AD224F6D664A9215D32AB982EA88EF24A",
+      "Sha256": "35677C19452477AEDB8DC2894CA0A289BE127E97E7289761F18DE799F210CF7A",
       "Localization": {
         "Source": {
           "Title": "成就追踪",
-          "Description": "读取游戏原生成就进度，按角色保存追踪目标与显示设置。"
+          "Description": "读取游戏原生成就进度。在成就界面右键选择「加入目标列表」即可自动同步至本模块，追踪目标与显示设置按角色保存。"
         }
       }
     },
