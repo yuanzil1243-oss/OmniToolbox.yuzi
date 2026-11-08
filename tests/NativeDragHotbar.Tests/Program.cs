@@ -20,6 +20,7 @@ const ulong owner = 0x1122334455667788;
 var path = Path.Combine(temp, "profile.json");
 try
 {
+    SharedProfilesChecks.Run(temp, Check, Reject);
     var profile = HotbarProfileStore.Load(path, owner, out var recovered);
     Check(!recovered && profile.Owner == owner.ToString("X16") && profile.Bars.Single().Slots.Count == 12, "new character gets twelve empty slots");
     profile.Bars.Add(new() { Name = "第二栏 面板" });
@@ -434,8 +435,10 @@ try
     { nestedDelivery = session.Release(false, false, true, true, Receive); return true; }) && !nestedDelivery,
         "reentrant callbacks cannot deliver the same session twice");
 
-    var omni = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XIVLauncherCN/installedPlugins/OmniToolbox/1.1.8.9");
-    var dalamud = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XIVLauncherCN/addon/Hooks/dev");
+    var omni = Environment.GetEnvironmentVariable("NATIVE_DRAG_HOTBAR_OMNI_DIR")
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XIVLauncherCN/installedPlugins/OmniToolbox/1.1.8.9");
+    var dalamud = Environment.GetEnvironmentVariable("NATIVE_DRAG_HOTBAR_DALAMUD_DIR")
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XIVLauncherCN/addon/Hooks/dev");
     var context = new AssemblyLoadContext("hotbar-contract", true);
     context.Resolving += (_, name) =>
     {
@@ -449,15 +452,15 @@ try
     var host = context.LoadFromAssemblyPath(Path.Combine(omni, "OmniToolbox.Common.dll"));
     host.GetType("OmniToolbox.Common.Module.Runtime.ModuleContract", true)!
         .GetMethod("ValidateType", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [type]);
-    Check(true, "compiled module passes actual Omni 1.1.8.9 API 1 contract validator");
+    Check(true, $"compiled module passes actual Omni {Path.GetFileName(omni)} API 1 contract validator");
     var module = Activator.CreateInstance(type)!;
     var info = type.GetProperty("Info")!.GetValue(module)!;
     var localization = type.GetProperty("Localization")!.GetValue(module)!;
     Check(info is not null && localization is not null, "compiled module instantiates and constructs localization without game services");
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 0, 0)
-        && version.FileVersion == "1.1.0.0" && version.ProductVersion == "1.1.0"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.0", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 2, 0)
+        && version.FileVersion == "1.1.2.0" && version.ProductVersion == "1.1.2"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.2", "module, assembly identity, assembly version and file version agree");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
     context.Unload();
     Console.WriteLine($"{checks} checks passed. Native game interaction still requires in-game testing.");

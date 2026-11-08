@@ -152,7 +152,7 @@ internal static class HotbarRules
     public static void Validate(HotbarProfile profile, ulong owner)
     {
         if (profile.SchemaVersion is not (1 or 2) || profile.Owner != owner.ToString("X16"))
-            throw new InvalidDataException("配置版本或角色身份不匹配。");
+            throw new InvalidDataException("配置版本或身份标记不匹配。");
         if (profile.Bars is null || profile.Bars.Count > MaxBars) throw new InvalidDataException("热键栏数量无效。");
         var ids = new HashSet<string>();
         foreach (var bar in profile.Bars)

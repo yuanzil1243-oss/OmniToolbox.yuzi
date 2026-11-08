@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\Modules\NativeDragHotbarData.cs" Link="NativeDragHotbarData.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarShared.cs" Link="NativeDragHotbarShared.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarExecution.cs" Link="NativeDragHotbarExecution.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarDrag.cs" Link="NativeDragHotbarDrag.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarInventory.cs" Link="NativeDragHotbarInventory.cs" />

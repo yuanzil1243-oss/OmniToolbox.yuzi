@@ -1,5 +1,7 @@
 param(
-    [string]$Destination = 'C:\Users\24496\Documents\ChatGPT\本地模块dll'
+    [string]$Destination = 'C:\Users\24496\Documents\ChatGPT\本地模块dll',
+    [string]$OmniDir = '',
+    [string]$DalamudDir = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -17,7 +19,18 @@ foreach ($target in @($dllName, $readmeName)) {
     if (Test-Path -LiteralPath (Join-Path $Destination $target)) { throw "版本文件已经存在，不覆盖发布：$target。请先递增版本。" }
 }
 if (Test-Path -LiteralPath $stage) { throw "本版本打包目录已存在，请检查或递增版本：$stage" }
-& dotnet build $project -c Release --nologo
+$buildArgs = @('build', $project, '-c', 'Release', '--nologo')
+if ($OmniDir) {
+    $OmniDir = [IO.Path]::GetFullPath($OmniDir)
+    $buildArgs += "-p:OmniDir=$OmniDir"
+    $env:NATIVE_DRAG_HOTBAR_OMNI_DIR = $OmniDir
+}
+if ($DalamudDir) {
+    $DalamudDir = [IO.Path]::GetFullPath($DalamudDir)
+    $buildArgs += "-p:DalamudDir=$DalamudDir"
+    $env:NATIVE_DRAG_HOTBAR_DALAMUD_DIR = $DalamudDir
+}
+& dotnet @buildArgs
 if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
 & dotnet run --project (Join-Path $root 'tests\NativeDragHotbar.Tests\NativeDragHotbar.Tests.csproj') -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Offline checks failed.' }

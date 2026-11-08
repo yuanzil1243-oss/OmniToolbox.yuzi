@@ -66,7 +66,7 @@ internal static class HotbarTransfer
         if (profile.Bars.Count + document.Bars.Count > HotbarRules.MaxBars)
             throw new InvalidDataException("导入后热键栏会超过 12 条；请先删除不需要的栏。");
 
-        // Validate the complete candidate before mutating the existing character's profile.
+        // Validate the complete candidate before mutating the existing profile.
         var additions = document.Bars.Select(bar => CopyBar(bar, true)).ToList();
         var names = new HashSet<string>(profile.Bars.Select(bar => bar.Name), StringComparer.OrdinalIgnoreCase);
         foreach (var bar in additions)

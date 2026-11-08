@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.2";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [new("ToggleCommand", "/draghotbar toggle")] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -31,10 +31,11 @@ public sealed class NativeDragHotbar : OmniModuleBase
         ["Description"] = "支持接收游戏原生技能与功能按钮，右键编辑图标、说明及自定义指令，支持自由布局和导入导出。",
         ["ToggleCommand"] = "显示或隐藏置顶热键栏；可追加 #序号或栏名称指定单栏",
         ["Help"] = "左键点击执行；从游戏技能页或原生热键栏拖入；右键编辑；未锁定时栏内左键拖动换位。按住 Alt + 左键可拖动整栏。已有内容的格子会询问是否替换。",
-        ["Help2"] = "支持技能、通用技能、主指令、情感动作、坐骑、宠物、套装、用户宏及背包物品等原生热键类型。没有原生冷却动画或键盘绑定。",
+        ["Help2"] = "支持技能、通用技能、主指令、情感动作、坐骑、宠物、套装、用户宏及背包物品等原生热键类型。配置在本机共用，切换账号或角色沿用同一套设置。没有原生冷却动画或键盘绑定。",
         ["ShowHelp"] = "显示操作说明",
-        ["Waiting"] = "请登录角色后配置热键栏。配置按角色分别保存。",
-        ["Readonly"] = "角色配置或备份读取失败，已暂停编辑和写入。详情见日志。",
+        ["Waiting"] = "请登录角色后配置热键栏。本地所有账号和角色共用一套配置。",
+        ["Readonly"] = "共享配置、备份或旧配置迁移读取失败，已暂停编辑和写入。详情见日志。",
+        ["Migrated"] = "已建立本地共享配置，迁移来源：{0}；旧文件已保留。",
         ["SaveError"] = "保存失败，修改仍在内存中。请检查日志与配置目录权限。",
         ["Retry"] = "重试保存",
         ["Recovered"] = "已从备份恢复；损坏的原文件已另存保留。",
@@ -113,7 +114,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
     private Settings config = new();
     private HotbarProfile profile = new();
     private ulong owner;
-    private bool readOnly, recovering, dirty;
+    private bool readOnly, recovering, dirty, profileLoaded;
     private string saveError = "", notice = "";
     private long noticeUntil;
     private int selected;
@@ -153,7 +154,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
     public override bool HasSettings => true;
     private string L(string key, params object[] args)
     { var value = OmniLoc.Get(this, key); return args.Length == 0 ? value : string.Format(value, args); }
-    private string ProfilePath => Path.Combine(DalamudServices.PluginInterface.GetPluginConfigDirectory(), $"NativeDragHotbar-{owner:X16}.json");
+    private string ProfilePath => HotbarSharedProfiles.PathFor(DalamudServices.PluginInterface.GetPluginConfigDirectory());
     private string BarLabel(DragHotbar bar) => $"#{profile.Bars.IndexOf(bar) + 1} {bar.Name}";
 
     private bool ReadNativeHotbarLock()
@@ -215,7 +216,11 @@ public sealed class NativeDragHotbar : OmniModuleBase
     }
 
     protected override void OnStop()
-    { Save(); bridge = null; targets.Clear(); received.Clear(); replacing = null; CloseEditor(); owner = 0; }
+    {
+        Save(); bridge = null; targets.Clear(); received.Clear(); replacing = null; CloseEditor(); owner = 0;
+        // Keep unsaved shared settings in memory if a write failed while stopping.
+        profileLoaded = dirty;
+    }
 
     public override bool TryHandleCommand(string arguments)
     {
@@ -238,20 +243,39 @@ public sealed class NativeDragHotbar : OmniModuleBase
         var id = service.ClientState.IsLoggedIn && service.PlayerState.IsLoaded ? service.PlayerState.ContentId : 0;
         if (owner == id) return;
         Save();
-        owner = id; dirty = false; recovering = false; readOnly = false; saveError = "";
+        owner = id;
         selected = 0; targets.Clear(); received.Clear(); replacing = null; CloseEditor(); localDragBar = null; movingBar = null;
         pendingImport = null; importOwner = 0; layoutBarId = "";
-        profile = new() { Owner = id.ToString("X16") };
-        if (id == 0) return;
-        try { profile = HotbarProfileStore.Load(ProfilePath, owner, out recovering); dirty = profile.NeedsUpgradeSave | PrepareEntryIcons(); }
-        catch (Exception error) { readOnly = true; DalamudServices.PluginLog.Error(error, "拖放热键栏：角色配置加载失败"); }
+        // Character identity only guards game interaction and pending edits. It never selects
+        // the persisted profile, and a character switch must not discard unsaved shared changes.
+        if (id == 0 || profileLoaded) return;
+        readOnly = false; recovering = false; saveError = "";
+        try
+        {
+            profile = HotbarSharedProfiles.Load(DalamudServices.PluginInterface.GetPluginConfigDirectory(),
+                id, out recovering, out var migratedFrom);
+            profileLoaded = true;
+            dirty = profile.NeedsUpgradeSave | PrepareEntryIcons();
+            Save();
+            if (migratedFrom is not null)
+            {
+                DalamudServices.PluginLog.Information("拖放热键栏：旧配置迁移到本地共享配置，来源 {Source}", migratedFrom);
+                if (!dirty) Notify(L("Migrated", Path.GetFileName(migratedFrom)));
+            }
+        }
+        catch (Exception error)
+        { profileLoaded = false; readOnly = true; DalamudServices.PluginLog.Error(error, "拖放热键栏：共享配置加载或迁移失败"); }
     }
 
     private void Save()
     {
-        if (!dirty || owner == 0 || readOnly) return;
-        PrepareEntryIcons();
-        try { HotbarProfileStore.Save(ProfilePath, profile, owner, recovering); dirty = false; recovering = false; saveError = ""; }
+        if (!dirty || !profileLoaded || readOnly) return;
+        try
+        {
+            PrepareEntryIcons();
+            HotbarProfileStore.Save(ProfilePath, profile, HotbarSharedProfiles.Owner, recovering);
+            dirty = false; recovering = false; saveError = "";
+        }
         catch (Exception error) { saveError = error.Message; DalamudServices.PluginLog.Error(error, "拖放热键栏：配置保存失败"); }
     }
 
@@ -375,7 +399,7 @@ public sealed class NativeDragHotbar : OmniModuleBase
             try
             {
                 var imported = pendingImport;
-                selected = HotbarTransfer.Append(profile, owner, imported);
+                selected = HotbarTransfer.Append(profile, HotbarSharedProfiles.Owner, imported);
                 if (importGlobalSettings)
                 {
                     if (imported.ShowAllBars is { } show) profile.Show = show;
