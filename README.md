@@ -11,7 +11,7 @@ Yuzi 的 OmniToolbox（树树妙妙屋）在线模块仓库。
 | 极限技调整 | `Modules/LimitBreakAdjustments.dll` | 0.1.6 |
 | 按键连点 | `Modules/KeyRepeater.dll` | 0.2.3 |
 | 成就追踪 | `Modules/AchievementTracker.dll` | 1.1.0 |
-| 拖放热键栏 | `Modules/NativeDragHotbar.dll` | 1.1.2 |
+| 拖放热键栏 | `Modules/NativeDragHotbar.dll` | 1.1.4 |
 
 清单中的路径、版本和 SHA256 与上述 DLL 对应。前四个模块的原有 `.cs` 文件保留，但不再作为在线下载文件；修复包未包含对应源码，因此这些旧源码不代表修复包 DLL 的完整实现。成就追踪的完整源码、构建工程和存储测试随本仓库保存。
 
@@ -40,6 +40,13 @@ https://raw.githubusercontent.com/yuanzil1243-oss/OmniToolbox.yuzi/main/TreeHous
 模块源码统一放在 `Modules/`，版本文件固定使用根目录 `TreeHouseModules.json`。新增模块时在清单中追加条目，并填写发布文件（`.cs` 或 `.dll`）相对路径与实际文件的 SHA256。
 
 **版本规则：以后任何改动都必须递增涉及模块的版本号，同步构建产物、清单、SHA256 和相关说明，不得覆盖发布同版本的不同内容。
+
+### 拖放热键栏 1.1.4
+
+- 修复游戏函数入口被其他插件 Hook 后，兼容性检查误判而无法启用的问题。使用宿主保存的原始代码副本校验，按真实地址解析分支；保留严格布局、分支一致性和完整读取范围检查。
+- 由用户已确认可以安装的本地 1.1.3 修复版晋升正式发布；修复逻辑不变，按版本约定更新正式说明、递增至 1.1.4 并重新构建。
+- 所有账号和角色继续使用同一份本地共享配置，升级无需删除或重新导入配置。
+- 193 项检查通过，构建 0 警告、0 错误；程序集/文件版本 1.1.4.0，最低 Omni 1.1.8.9。说明见 [NativeDragHotbar-1.1.4](docs/NativeDragHotbar-1.1.4.md)。
 
 ### 拖放热键栏 1.1.2
 

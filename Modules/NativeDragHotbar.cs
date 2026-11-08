@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "1.1.2";
+    public const string Version = "1.1.4";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [new("ToggleCommand", "/draghotbar toggle")] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>

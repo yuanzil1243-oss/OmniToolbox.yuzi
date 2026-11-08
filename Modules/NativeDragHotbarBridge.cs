@@ -37,17 +37,16 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
     {
         var wrapper = (byte*)RaptureHotbarModule.MemberFunctionPointers.ExecuteSlotById;
         if (wrapper == null) throw new InvalidOperationException("原生热键执行入口未就绪。");
-        var target = NativeHotbarExecution.Resolve(new ReadOnlySpan<byte>(wrapper, 93), (long)wrapper);
+        var target = NativeHotbarExecution.Resolve(ReadCodeSnapshot(wrapper, 93), (long)wrapper);
         // Confirm that the callee reads CommandType from its second argument (HotbarSlot*).
         var inner = (byte*)target;
-        if (!new ReadOnlySpan<byte>(inner + 18, 7).SequenceEqual(new byte[] { 0x0F, 0xB6, 0x82, 0xC7, 0, 0, 0 }))
-            throw new InvalidOperationException("原生热键格执行函数布局不匹配。");
+        NativeHotbarExecution.ValidateSlotExecutor(ReadCodeSnapshot(inner, 25));
         executeSlot = (delegate* unmanaged<RaptureHotbarModule*, NativeSlot*, byte>)inner;
         try
         {
             var site = (byte*)DService.Instance().SigScanner.ScanText(NativeHotbarInventory.Signature);
-            var converter = (byte*)NativeHotbarInventory.Resolve(new ReadOnlySpan<byte>(site, 38), (long)site);
-            if (!new ReadOnlySpan<byte>(converter, 14).SequenceEqual(new byte[] {0x40,0x53,0x55,0x56,0x57,0x41,0x56,0x48,0x81,0xEC,0x80,0,0,0}))
+            var converter = (byte*)NativeHotbarInventory.Resolve(ReadCodeSnapshot(site, 38), (long)site);
+            if (!ReadCodeSnapshot(converter, 14).SequenceEqual(new byte[] {0x40,0x53,0x55,0x56,0x57,0x41,0x56,0x48,0x81,0xEC,0x80,0,0,0}))
                 throw new InvalidOperationException("背包位置转换函数布局不匹配。");
             resolveInventory = (delegate* unmanaged<uint*, short*, int, int, void>)converter;
         }
@@ -76,6 +75,17 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         dropHook.Enable();
         cancelHook.Enable();
         Ready = true;
+    }
+
+    private static ReadOnlySpan<byte> ReadCodeSnapshot(byte* live, int length)
+    {
+        // Other plugins may legitimately detour live entrypoints. Validate the host's
+        // original game-code copy, while resolving branches against LIVE addresses.
+        // Execution still uses the live entrypoint and its existing hook chain.
+        var scanner = DService.Instance().SigScanner;
+        var address = NativeHotbarExecution.SnapshotAddress((long)live, (long)scanner.Module.BaseAddress,
+            (long)scanner.SearchBase, scanner.TextSectionOffset, scanner.TextSectionSize, length);
+        return new ReadOnlySpan<byte>((void*)address, length);
     }
 
     private void OnStartDrag(AtkDragDropManager* manager, AtkDragDropInterface* source, short x, short y)

@@ -21,6 +21,7 @@ var path = Path.Combine(temp, "profile.json");
 try
 {
     SharedProfilesChecks.Run(temp, Check, Reject);
+    ExecutionCompatibilityChecks.Run(Check, Reject);
     var profile = HotbarProfileStore.Load(path, owner, out var recovered);
     Check(!recovered && profile.Owner == owner.ToString("X16") && profile.Bars.Single().Slots.Count == 12, "new character gets twelve empty slots");
     profile.Bars.Add(new() { Name = "第二栏 面板" });
@@ -458,9 +459,9 @@ try
     var localization = type.GetProperty("Localization")!.GetValue(module)!;
     Check(info is not null && localization is not null, "compiled module instantiates and constructs localization without game services");
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 2, 0)
-        && version.FileVersion == "1.1.2.0" && version.ProductVersion == "1.1.2"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.2", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 4, 0)
+        && version.FileVersion == "1.1.4.0" && version.ProductVersion == "1.1.4"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.4", "module, assembly identity, assembly version and file version agree");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
     context.Unload();
     Console.WriteLine($"{checks} checks passed. Native game interaction still requires in-game testing.");
