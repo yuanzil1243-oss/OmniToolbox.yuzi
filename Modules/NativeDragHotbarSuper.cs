@@ -23,6 +23,8 @@ public sealed partial class NativeDragHotbar
     private readonly NativeHotbarIconVisual superVisuals = new();
     private readonly NativeHotbarGameFonts superFonts = new();
     private bool superNativeDrawSuppressed;
+    private readonly NativeHotbarMouseSuppression superNativeMouse = new();
+    private static readonly string[] SuperNativeAddonNames = Enumerable.Range(0, 10).Select(SuperNativeArchive.AddonName).ToArray();
     private ulong superOwner;
     private int superGroup = -1, superSelectedBar, superBindingSlot, superRecording = -1;
     private bool superReady, superFault, superReadOnly, superDirty;
@@ -50,9 +52,14 @@ public sealed partial class NativeDragHotbar
             Dalamud.Interface.ManagedFontAtlas.FontAtlasAutoRebuildMode.Async, false, "SuperHotbar native pixels")); }
         catch (Exception error) { DalamudServices.PluginLog.Warning(error, "热键栏工坊：游戏字体图集暂不可用，保留备用文字"); }
         activation.OnStopping(superFonts.Dispose);
-        var names = Enumerable.Range(0, 10).Select(SuperNativeArchive.AddonName).ToArray();
+        var names = SuperNativeAddonNames;
         DalamudServices.AddonLifecycle.RegisterListener(AddonEvent.PreDraw, names, OnSuperNativeDraw);
         activation.OnStopping(() => DalamudServices.AddonLifecycle.UnregisterListener(AddonEvent.PreDraw, names, OnSuperNativeDraw));
+        foreach (var lifecycle in new[] { AddonEvent.PostUpdate, AddonEvent.PreFinalize })
+        {
+            DalamudServices.AddonLifecycle.RegisterListener(lifecycle, names, OnSuperNativeMouse);
+            activation.OnStopping(() => DalamudServices.AddonLifecycle.UnregisterListener(lifecycle, names, OnSuperNativeMouse));
+        }
         StartSuperRepeatBridge(activation);
         DalamudServices.Framework.Update += UpdateSuper;
         activation.OnStopping(() => DalamudServices.Framework.Update -= UpdateSuper);
@@ -61,12 +68,25 @@ public sealed partial class NativeDragHotbar
 
     private void OnSuperNativeDraw(AddonEvent type, AddonArgs args)
     {
-        if (!SuperActive || !super!.HideNative || NativeBarGeometryReader.HudEditing()) return;
+        if (!SuperActive || !super!.HideNative || !NativeHotbarUiContext.Visible() || NativeBarGeometryReader.HudEditing()) { RestoreSuperVisibility(); return; }
         // This host event runs at the actual native Draw call. Root visibility alone can be
         // reset by the game's update and therefore is insufficient to replace a native bar.
         args.PreventOriginal();
         superNativeDrawSuppressed = true;
         superNativeDrawBlocks++;
+        OnSuperNativeMouse(type, args);
+    }
+    private void OnSuperNativeMouse(AddonEvent type, AddonArgs args)
+    {
+        try
+        {
+            var index = Array.IndexOf(SuperNativeAddonNames, args.AddonName);
+            if (index < 0) return;
+            if (type == AddonEvent.PreFinalize || !SuperActive || !super!.HideNative || !NativeHotbarUiContext.Visible() || NativeBarGeometryReader.HudEditing())
+                superNativeMouse.Release(index);
+            else superNativeMouse.Suppress(index);
+        }
+        catch (Exception error) { PauseSuper(error); }
     }
     private void StopSuper()
     {
@@ -116,6 +136,7 @@ public sealed partial class NativeDragHotbar
         {
             nativeDetails?.Tick(Environment.TickCount64);
             EnsureProfile(); EnsureSuper();
+            UpdateWorkshopGameTemplate();
             UpdateSuperRestoreSaveWatch();
             if (super is not null && SuperHotbarRules.UpgradePresentation(super, SuperHotbarKeyMapRuntime.Current))
             { superDirty = true; SaveSuper(true); }
@@ -128,6 +149,7 @@ public sealed partial class NativeDragHotbar
                 superReady = false; RestoreSuperVisibility(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
                 superStatus = "原生桥接不可用，已停止模块按键与拦截；请停用后重新启用模块并检查日志。"; return;
             }
+            if (!NativeHotbarUiContext.Visible()) { SuspendHotbarUi(); return; }
             var native = SuperNativeArchive.Require(owner);
             UpdateSuperHudContext();
             UpgradeSuperGeometry();
@@ -157,6 +179,9 @@ public sealed partial class NativeDragHotbar
                 superReady = false; RestoreSuperVisibility(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown); return;
             }
             superReady = true;
+            if (super.HideNative && !superHudEditing)
+                for (var index = 0; index < 10; index++) superNativeMouse.Suppress(index);
+            else RestoreSuperVisibility();
             var allowed = SuperInputAllowed();
             if (superRecording >= 0) { RecordSuperKey(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown); }
             else { PollSuperKeys(allowed); PollBuiltInRepeat(allowed); }
@@ -210,8 +235,7 @@ public sealed partial class NativeDragHotbar
     {
         superLastDraw = Environment.TickCount64;
         if (!SuperActive) { RestoreSuperVisibility(); return; }
-        var atk = RaptureAtkModule.Instance();
-        if (atk == null || !atk->IsUiVisible) { RestoreSuperVisibility(); return; }
+        if (!NativeHotbarUiContext.Visible()) { SuspendHotbarUi(); return; }
         UpdateSuperHudContext();
         if (super!.Show)
             for (var index = 0; index < 10; index++)
@@ -221,12 +245,12 @@ public sealed partial class NativeDragHotbar
     }
     private void RestoreSuperVisibility()
     {
-        // Each PreDraw decision is independent. Never change RootNode visibility or persist
-        // a cached flag: addon rebuilds, HUD editing and job transitions remain game-owned.
+        superNativeMouse.ReleaseAll();
+        // Root visibility and saved HUD flags remain game-owned.
         superNativeDrawSuppressed = false;
     }
 
-    private void DrawSuperSlotOverlay(DragHotbar bar, int slot, Vector2 min, Vector2 max)
+    private void DrawSuperSlotOverlay(ImDrawListPtr list, DragHotbar bar, int slot, Vector2 min, Vector2 max)
     {
         var index = SuperBarIndex(bar); if (index < 0 || !SuperActive) return;
         var entry = bar.Slots[slot];
@@ -235,7 +259,7 @@ public sealed partial class NativeDragHotbar
         var label = binding is null ? "" : binding.Primary.Key != 0 ? binding.Primary.Compact()
             : binding.Secondary.Key != 0 ? binding.Secondary.Compact()
             : binding.Primary.UnmappedNativeKey != 0 ? binding.Primary.Compact() : binding.Secondary.Compact();
-        superVisuals.DrawStyled(ImGui.GetWindowDrawList(), bar.Id, slot,
+        superVisuals.DrawStyled(list, bar.Id, slot,
             VisualIdentity(entry), state, label, min, max, Environment.TickCount64 / 1000.0,
             ImGui.GetStyle().Alpha, superFonts,
             superFonts.Started ? NativeHotbarFontReader.Read(index, slot) : NativeHotbarTextStyles.Default, true);

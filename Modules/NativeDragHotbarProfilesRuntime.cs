@@ -9,6 +9,7 @@ public sealed partial class NativeDragHotbar
 {
     private WorkshopLibrary? workshopLibrary;
     private bool workshopRecovered, workshopDirty, workshopLoadAttempted;
+    private bool workshopVisibilityPending;
     private string workshopRuntimeId = "", workshopSaveError = "";
     private string WorkshopDirectory => DalamudServices.PluginInterface.GetPluginConfigDirectory();
 
@@ -20,6 +21,7 @@ public sealed partial class NativeDragHotbar
         {
             var library = WorkshopLibraryStore.Load(WorkshopDirectory, owner, config.ShowCommandMessages,
                 out var recovered, out var migrated);
+            workshopVisibilityPending = WorkshopVisibilityStore.Replay(WorkshopDirectory, library);
             workshopLibrary = library; workshopRecovered = recovered;
             profile = library.Current.Extensions; config.ShowCommandMessages = library.Current.ShowCommandMessages;
             profileLoaded = true; readOnly = superReadOnly = false; recovering = false;
@@ -38,9 +40,11 @@ public sealed partial class NativeDragHotbar
     private void ResetWorkshopRuntime()
     {
         nativeDetails?.Release(); superReady = false; RestoreSuperVisibility();
+        ClearWorkshopGameOperation(); workshopGameReadyAt = 0; workshopGameSaveWatch = null;
+        workshopGameStatus = workshopGameBackupPath = "";
         builtInRepeat.Clear(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
         superGroup = -1; superPage = 0; superRecording = -1; superBindingDraft = null;
-        superFault = false; superGeometryWarning = false; superHudEditing = false;
+        superFault = false; superHudEditing = false;
         restoreConfirm = false; superRestoreResult = superRestoreBackupPath = ""; superRestorePreview = null; superRestoreSaveWatch = null;
         superVisuals.Clear(); targets.Clear(); received.Clear(); replacing = null; CloseEditor();
         movingBar = localDragBar = null; localDragIndex = -1; layoutBarId = ""; selected = 0;
@@ -60,7 +64,7 @@ public sealed partial class NativeDragHotbar
     private void SaveWorkshop(bool force)
     {
         if (workshopLibrary is null || readOnly || superReadOnly) return;
-        var changed = dirty || superDirty || workshopDirty || workshopRecovered
+        var changed = dirty || superDirty || workshopDirty || workshopRecovered || workshopVisibilityPending
             || config.ShowCommandMessages != workshopLibrary.Current.ShowCommandMessages;
         if (!changed || !force && Environment.TickCount64 < superSaveAt) return;
         try
@@ -75,6 +79,7 @@ public sealed partial class NativeDragHotbar
             }
             WorkshopLibraryStore.Save(WorkshopDirectory, workshopLibrary, workshopRecovered);
             dirty = superDirty = workshopDirty = workshopRecovered = recovering = false;
+            workshopVisibilityPending = false;
             workshopSaveError = saveError = ""; superSaveAt = Environment.TickCount64 + 1000;
         }
         catch (Exception error)
@@ -84,6 +89,34 @@ public sealed partial class NativeDragHotbar
             superSaveAt = Environment.TickCount64 + 5000;
             DalamudServices.PluginLog.Error(error, "热键栏工坊：本机配置库保存失败");
         }
+    }
+
+    private bool ApplyWorkshopVisibilityCommand(bool takeover, HotbarVisibilityAction action, string selector)
+    {
+        if (workshopLibrary is null || readOnly || superReadOnly) return true;
+        try
+        {
+            if (!WorkshopVisibilityCommands.Apply(workshopLibrary.Current, super, profile, takeover, action, selector,
+                state => WorkshopVisibilityStore.Save(WorkshopDirectory, state), out var index, out var changed))
+            { PrintCommandMessage(L("InvalidBar", selector)); return true; }
+            if (changed)
+            {
+                workshopVisibilityPending = true;
+                // A burst writes only tiny durable records; merge its latest state once after it settles.
+                superSaveAt = Environment.TickCount64 + 750;
+            }
+            var bars = takeover ? super!.Appearance : profile.Bars;
+            var show = takeover ? super!.Show : profile.Show;
+            PrintCommandMessage(HotbarCommandFeedback.Visibility(takeover, index,
+                index < 0 ? "" : bars[index].Name, show && (index < 0 || bars[index].Visible)));
+        }
+        catch (Exception error)
+        {
+            superStatus = "显隐状态保存失败，本次显示操作未执行：" + error.Message;
+            Notify(superStatus); PrintCommandMessage(superStatus);
+            DalamudServices.PluginLog.Error(error, "热键栏工坊：显隐记录保存失败");
+        }
+        return true;
     }
 
     private bool CommitWorkshopEdit(Action<WorkshopLibrary> edit)

@@ -85,22 +85,27 @@ internal static class KeyboardAndVisualChecks
         check(SuperHotbarRules.RepeatChords(roundtrip).Contains(192 | 2 << 8)
             && SuperHotbarRules.FirstBinding(roundtrip, 192, 2)?.InputId == 57,
             "physical dot key reaches both the takeover dispatcher and repeat IPC chord list");
-        var geometries = Enumerable.Range(0,10).Select(i => NativeBarGeometry.FromRoot(new(i*100,i*20),1.1f,6,2)).ToArray();
+        for (var i = 0; i < 10; i++)
+        { roundtrip.Appearance[i].X = i * 100; roundtrip.Appearance[i].Y = i * 20; roundtrip.Appearance[i].Scale = 1.1f;
+            roundtrip.Appearance[i].Columns = 6; roundtrip.Appearance[i].Rows = 2; }
+        var geometries = roundtrip.Appearance.Select(b => NativeBarGeometry.FromRoot(new(b.X, b.Y), b.Scale, b.Columns, b.Rows)).ToArray();
         var beforeGeometry = SuperHotbarStore.Encode(roundtrip,owner);
-        var badGeometry=geometries.ToArray();badGeometry[9]=badGeometry[9] with { Scale=float.NaN };
-        reject(() => NativeBarGeometryMigration.Upgrade(roundtrip,badGeometry), "invalid tenth bar rejects whole geometry migration");
+        var badGeometry = WorkshopProfiles.Copy(roundtrip); badGeometry.Appearance[9].Scale = float.NaN;
+        reject(() => NativeBarGeometryMigration.Upgrade(badGeometry), "invalid tenth saved bar rejects whole geometry migration");
         check(SuperHotbarStore.Encode(roundtrip,owner)==beforeGeometry, "rejected geometry migration preserves all ten bars and archive bytes");
-        reject(() => NativeBarGeometryMigration.Upgrade(roundtrip,geometries.Take(9).ToArray()), "incomplete native addon set cannot partially migrate geometry");
+        var incomplete = WorkshopProfiles.Copy(roundtrip); incomplete.Appearance.RemoveAt(9);
+        reject(() => NativeBarGeometryMigration.Upgrade(incomplete), "incomplete saved layout cannot partially migrate geometry");
         var savedEntries=roundtrip.Appearance.Select(b=>b.Slots).ToArray();
-        var savedKeys=JsonSerializer.Serialize(roundtrip.Bindings);var savedShared=roundtrip.Shared.ToArray();
-        check(NativeBarGeometryMigration.Upgrade(roundtrip,geometries) && roundtrip.NativeGeometryVersion==1
-            && roundtrip.AppearanceMappingVersion==1 && !NativeBarGeometryMigration.Upgrade(roundtrip,geometries)
+        var savedKeys=JsonSerializer.Serialize(roundtrip.Bindings);var savedShared=roundtrip.Shared.ToArray(); var mapping = roundtrip.AppearanceMappingVersion;
+        check(NativeBarGeometryMigration.Upgrade(roundtrip) && roundtrip.NativeGeometryVersion==1
+            && roundtrip.AppearanceMappingVersion==mapping && !NativeBarGeometryMigration.Upgrade(roundtrip)
+            && roundtrip.Appearance.Select((b, i) => NativeBarGeometry.FromSaved(b) == geometries[i]).All(v => v)
             && roundtrip.Appearance.Select(b=>b.Slots).SequenceEqual(savedEntries)
             && JsonSerializer.Serialize(roundtrip.Bindings)==savedKeys && roundtrip.Shared.SequenceEqual(savedShared),
             "all-ten geometry migration is atomic, idempotent, and preserves content, key bindings and shared/job ownership");
-        roundtrip.Locked=true;roundtrip.Appearance[0].FollowNativeHud=false;
+        roundtrip.Locked=true;
         var geometryRestored=SuperHotbarStore.Decode(SuperHotbarStore.Encode(roundtrip,owner),owner);
-        check(geometryRestored.Locked && !geometryRestored.Appearance[0].FollowNativeHud
+        check(geometryRestored.Locked
             && geometryRestored.NativeGeometryVersion==1 && geometryRestored.Appearance[0].X==roundtrip.Appearance[0].X
             && geometryRestored.Bindings[0].NativeData==raw,
             "lock, native/client-pixel geometry and independent placement survive checksum-protected backup and restore");

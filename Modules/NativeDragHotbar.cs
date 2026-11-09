@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.4.0";
+    public const string Version = "2.5.0";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -232,22 +232,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         EnsureProfile(); EnsureSuper();
         if (owner == 0 || (takeover ? super is null || superReadOnly : readOnly))
         { PrintCommandMessage(L("CommandUnavailable")); return true; }
-        if (takeover)
-        {
-            var active = new HotbarProfile { Show = super!.Show, Bars = super.Appearance };
-            if (!HotbarVisibilityCommands.Apply(active, action, selector, out var nativeIndex))
-            { PrintCommandMessage(L("InvalidBar", selector)); return true; }
-            super.Show = active.Show; superDirty = true; SaveSuper(true);
-            PrintCommandMessage(HotbarCommandFeedback.Visibility(true, nativeIndex,
-                nativeIndex < 0 ? "" : active.Bars[nativeIndex].Name,
-                active.Show && (nativeIndex < 0 || active.Bars[nativeIndex].Visible)));
-            return true;
-        }
-        if (!HotbarVisibilityCommands.Apply(profile, action, selector, out var index))
-        { PrintCommandMessage(L("InvalidBar", selector)); return true; }
-        var visible = profile.Show && (index < 0 || profile.Bars[index].Visible);
-        PrintCommandMessage(HotbarCommandFeedback.Visibility(false, index, index < 0 ? "" : profile.Bars[index].Name, visible));
-        dirty = true; Save(); return true;
+        return ApplyWorkshopVisibilityCommand(takeover, action, selector);
     }
 
     private void PrintCommandMessage(string text)
@@ -460,6 +445,8 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             if (NativeHotbarBridge.TryGetGameClientOrigin(out var origin))
                 cursorOffset = ImGui.GetMainViewport().Pos - new Vector2(origin.X, origin.Y);
             if (owner == 0) return;
+            if (!NativeHotbarUiContext.Visible()) { SuspendHotbarUi(); return; }
+            pluginWindowAtMouse = PluginWindowAtMouse(false);
             nativeTooltipPassthrough.Clear();
             nativeWindowCovers = NativeHotbarWindowLayers.Read(ImGui.GetMainViewport().Pos,
                 nativeDetails?.OwnsCurrent == true ? nativeTooltipPassthrough : null);
@@ -508,7 +495,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoFocusOnAppearing
             | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoMove;
         if (NativeWindowAtMouse) flags |= ImGuiWindowFlags.NoInputs;
-        var drawContents = ImGui.Begin(BarLabel(bar) + "###NativeDragHotbar-" + bar.Id, flags);
+        var drawContents = ImGui.Begin(HotbarInputWindowName(bar), flags);
         SendHotbarWindowBack();
         try
         {
@@ -555,7 +542,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         if (nativeGeometry) ImGui.SetCursorScreenPos(min + new Vector2(4, 3) * (size / 48));
         var clicked = ImGui.InvisibleButton("##slot", new(nativeGeometry ? size * 40 / 48 : size));
         var hovered = allowInput && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
-        var list = ImGui.GetWindowDrawList();
+        var list = HotbarDrawList(nativeGeometry);
         var border = hovered ? (nativeDragging ? (supported ? 0xFF6EE6A5u : 0xFF6B6BEEu) : 0xFFDDDDDDu) : 0xFF555555u;
         var tints = HotbarPresentation.SlotTints(bar.Opacity, ImGui.GetStyle().Alpha, border);
         var icon = ResolveIcon(entry);
@@ -569,7 +556,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
                 list.AddImage(texture.Handle, min + (nativeGeometry ? new Vector2(4, 3) * (size / 48) : Vector2.One),
                     nativeGeometry ? min + new Vector2(44, 43) * (size / 48) : max - Vector2.One, Vector2.Zero, Vector2.One, tints.Image);
             if (!nativeGeometry || hovered) list.AddRect(min, max, tints.Frame, 3, ImDrawFlags.None, hovered ? 2 : 1);
-            if (nativeGeometry) DrawSuperSlotOverlay(bar, index, min, max);
+            if (nativeGeometry) DrawSuperSlotOverlay(list, bar, index, min, max);
             else if (entry.HasNative && bridge is { Ready: true })
                 superVisuals.DrawStyled(list, bar.Id, index, VisualIdentity(entry), bridge.State(entry), "", min, max,
                     Environment.TickCount64 / 1000.0, ImGui.GetStyle().Alpha, superFonts, NativeHotbarTextStyles.Default, false);
@@ -615,7 +602,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
 
     private DropArea? FindDropArea()
     {
-        if (owner == 0 || (!profile.Show && !(SuperActive && super!.Show)) || replacing is not null
+        if (owner == 0 || !NativeHotbarUiContext.Visible() || (!profile.Show && !(SuperActive && super!.Show)) || replacing is not null
             || Environment.TickCount64 - targetsAt > 150 || !NativeHotbarBridge.GetCursorPos(out var point)) return null;
         var pos = new Vector2(point.X, point.Y) + cursorOffset;
         if (nativeWindowCovers.Exists(r => r.Contains(pos)) || PluginWindowBlocksDrop()) return null;
@@ -675,7 +662,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         }
     }
 
-    private bool ValidRequest(DropRequest request) => owner == request.Owner && ContainsBar(request.Bar)
+    private bool ValidRequest(DropRequest request) => owner == request.Owner && NativeHotbarUiContext.Visible() && ContainsBar(request.Bar)
         && (SuperBarIndex(request.Bar) < 0 || super is { Locked: false } && !NativeBarGeometryReader.HudEditing())
         && request.Index >= 0 && request.Index < request.Bar.SlotCount
         && (!request.MacroInsertion || (!BarEditingLocked(request.Bar) && draft?.Mode == HotbarEntryMode.Command))

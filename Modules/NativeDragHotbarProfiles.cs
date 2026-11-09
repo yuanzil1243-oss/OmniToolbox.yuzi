@@ -16,6 +16,10 @@ internal sealed class WorkshopProfile
     public SuperHotbarDocument? Takeover { get; set; }
     public HotbarProfile Extensions { get; set; } = new() { Owner = "0000000000000000", Bars = [] };
     public bool ShowCommandMessages { get; set; } = true;
+    public long VisibilityRevision { get; set; }
+    public WorkshopGameTemplate? GameSettings { get; set; }
+    public bool AutoApplyGameSettings { get; set; }
+    public Dictionary<string, string> AppliedGameSettings { get; set; } = [];
 }
 
 internal sealed class WorkshopLibrary
@@ -66,6 +70,7 @@ internal static class WorkshopProfiles
         if (profile.Takeover is null) return null;
         var result = Copy(profile.Takeover);
         result.Character = character.ToString("X16");
+        NativeBarGeometryMigration.Upgrade(result);
         SuperHotbarRules.Validate(result, character);
         return result;
     }
@@ -73,8 +78,17 @@ internal static class WorkshopProfiles
     public static void Validate(WorkshopProfile profile)
     {
         if (profile is null || !Guid.TryParse(profile.Id, out _) || string.IsNullOrWhiteSpace(profile.Name)
-            || profile.Name.Length > 128 || profile.Extensions is null) throw new InvalidDataException("配置名称或标识无效。");
+            || profile.Name.Length > 128 || profile.Extensions is null || profile.VisibilityRevision < 0) throw new InvalidDataException("配置名称或标识无效。");
         HotbarRules.Upgrade(profile.Extensions, 0);
+        if (profile.GameSettings is not null)
+        {
+            WorkshopGameRules.Validate(profile.GameSettings);
+            if (profile.GameSettings.LocalHudSnapshot is not null) throw new InvalidDataException("本地应用前 HUD 备份不能作为跨角色模板。");
+        }
+        if (profile.AppliedGameSettings is null || profile.AppliedGameSettings.Count > 1024
+            || profile.AppliedGameSettings.Any(p => p.Key.Length != 16 || !ulong.TryParse(p.Key, NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out var id) || id == 0 || !Guid.TryParse(p.Value, out _)))
+            throw new InvalidDataException("游戏模板应用记录无效。");
         if (profile.Takeover is not null) SuperHotbarRules.Validate(profile.Takeover, PortableOwner);
     }
 
@@ -108,6 +122,7 @@ internal static class WorkshopProfiles
         if (library.Profiles.Count >= MaximumProfiles) throw new InvalidDataException("最多保存 32 套配置。");
         var added = Copy(profile);
         added.Id = Guid.NewGuid().ToString("N"); added.Name = UniqueName(library, name);
+        added.AutoApplyGameSettings = false; added.AppliedGameSettings.Clear();
         Validate(added); library.Profiles.Add(added); library.SelectedId = added.Id;
         return added;
     }
@@ -243,7 +258,9 @@ internal static class WorkshopLibraryStore
         var path = PathFor(directory); var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
-            File.WriteAllText(temporary, text, new UTF8Encoding(false));
+            var bytes = Encoding.UTF8.GetBytes(text);
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            { stream.Write(bytes); stream.Flush(true); }
             if (File.Exists(path)) File.Replace(temporary, path, recovered ? null : path + ".bak");
             else File.Move(temporary, path);
         }
@@ -267,7 +284,9 @@ internal static class WorkshopProfileTransfer
     public static string Encode(WorkshopProfile profile)
     {
         WorkshopProfiles.Validate(profile);
-        var payload = JsonSerializer.Serialize(profile, WorkshopProfiles.Json);
+        var portable = WorkshopProfiles.Copy(profile);
+        portable.AutoApplyGameSettings = false; portable.AppliedGameSettings.Clear();
+        var payload = JsonSerializer.Serialize(portable, WorkshopProfiles.Json);
         var text = JsonSerializer.Serialize(new Envelope { Format = Format, Payload = payload, Sha256 = Hash(payload) }, WorkshopProfiles.Json);
         if (text.Length > 32_000_000) throw new InvalidDataException("导出配置过大。");
         return text;
@@ -287,7 +306,9 @@ internal static class WorkshopProfileTransfer
                     throw new InvalidDataException("导入配置版本或校验无效。");
                 var profile = JsonSerializer.Deserialize<WorkshopProfile>(envelope.Payload, WorkshopProfiles.Json)
                     ?? throw new InvalidDataException("导入配置为空。");
-                WorkshopProfiles.Validate(profile); return new(profile, null);
+                WorkshopProfiles.Validate(profile);
+                profile.AutoApplyGameSettings = false; profile.AppliedGameSettings.Clear();
+                return new(profile, null);
             }
             if (format is not ("SuperHotbar.Backup" or "SuperHotbar.BackupWithExtensions"))
                 throw new InvalidDataException("不支持此导入格式。");

@@ -44,8 +44,6 @@ internal sealed class DragHotbar
     public float Y { get; set; } = 300;
     public float? AnchorX { get; set; }
     public float? AnchorY { get; set; }
-    // Only used for takeover bars. Extra bars keep their existing independent layout.
-    public bool FollowNativeHud { get; set; } = true;
     public List<HotbarEntry> Slots { get; set; } = Enumerable.Range(0, 12).Select(_ => new HotbarEntry()).ToList();
 }
 

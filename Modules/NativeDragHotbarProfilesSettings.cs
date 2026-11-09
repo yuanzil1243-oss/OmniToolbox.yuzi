@@ -18,6 +18,8 @@ public sealed partial class NativeDragHotbar
         workshopNameAction = 0; workshopImport = null; workshopMacroConfirm = false;
         workshopOperationId = ""; workshopOperationOwner = 0;
         workshopReplaceExtensions = importGlobalSettings = false;
+        superAppearanceConfirm = false;
+        ClearWorkshopGameOperation();
     }
 
     private void MarkWorkshopOperation()
@@ -37,7 +39,7 @@ public sealed partial class NativeDragHotbar
         ImGui.BeginDisabled(readOnly || superReadOnly);
         DrawWorkshopProfileToolbar();
         ImGui.Spacing();
-        ImGui.TextWrapped("本机登录其他角色时继续使用当前选择。设置自动保存；切换配置不写回游戏。");
+        ImGui.TextWrapped("本机登录其他角色时继续使用当前选择。设置自动保存；游戏设置模板仅在确认应用或开启自动应用后写入游戏。");
         if (ImGui.Button("读取游戏配置…")) BeginSuperNativeRead();
         ImGui.SameLine();
         ImGui.BeginDisabled(super is null);
@@ -55,6 +57,8 @@ public sealed partial class NativeDragHotbar
         DrawWorkshopImportPreview();
         ImGui.Separator();
         DrawWorkshopBackupInfo();
+        ImGui.Separator();
+        DrawWorkshopGameSettings();
         DrawSuperResetSettings();
         ImGui.EndDisabled();
         if (workshopSaveError.Length > 0)
@@ -62,7 +66,8 @@ public sealed partial class NativeDragHotbar
             ImGui.TextWrapped("保存失败，修改仍在内存：" + workshopSaveError);
             if (ImGui.Button("重试保存")) { workshopDirty = true; SaveWorkshop(true); }
         }
-        else ImGui.TextDisabled(dirty || superDirty || workshopDirty ? "正在自动保存…" : "已自动保存到本机。");
+        else ImGui.TextDisabled(dirty || superDirty || workshopDirty ? "正在自动保存…"
+            : workshopVisibilityPending ? "显隐状态已保存，正在合并完整配置…" : "已自动保存到本机。");
     }
 
     private void DrawWorkshopProfileToolbar()

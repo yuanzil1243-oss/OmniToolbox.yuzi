@@ -11,6 +11,7 @@ public sealed partial class NativeDragHotbar
 {
     private int superSettingsTab = -1, superRequestedSettingsTab = -1;
     private bool superSettingsExpanded, sharedSettingsExpanded;
+    private bool superAppearanceConfirm;
     private string superRestoreResult = "", superRestoreBackupPath = "";
     private static readonly string[] SuperSettingsTabs =
         ["接管", "栏位与布局", "快捷键", "备份与导入", "还原到游戏", "扩展栏", "操作说明"];
@@ -74,6 +75,7 @@ public sealed partial class NativeDragHotbar
     private void EnterSuperSettingsTab(int tab)
     {
         if (superSettingsTab == tab) return;
+        if (superSettingsTab == 1) superAppearanceConfirm = false;
         if (superSettingsTab == 2)
         {
             superRecording = -1; superBindingDraft = null;
@@ -158,7 +160,7 @@ public sealed partial class NativeDragHotbar
         ImGui.TextWrapped("技能、道具和可识别的宏会显示游戏原生介绍；显示位置跟随游戏帮助设置。");
         ImGui.TextWrapped("格子上的 c、a、s 分别表示 Ctrl、Alt、Shift；冷却中的充能技能显示下一层恢复时间。");
         ImGui.TextWrapped("编辑游戏界面布局时，接管栏暂停操作。十字热键栏和特殊临时栏仍由游戏显示。");
-        if (superGeometryWarning) ImGui.TextWrapped("暂时无法读取游戏栏位布局，正在使用已保存的位置。");
+        ImGui.TextWrapped("接管栏的位置、样式和缩放保存在当前配置中，换角色或账号继续使用，不跟随原生栏移动。");
         ImGui.Separator();
         var changed = ImGui.Checkbox(L("ShowCommandMessages"), ref config.ShowCommandMessages);
         ImGui.TextWrapped("在聊天栏显示命令执行结果和错误提示；关闭后命令照常执行。");
@@ -258,7 +260,6 @@ public sealed partial class NativeDragHotbar
             foreach (var (index, layout) in layouts)
             {
                 NativeHotbarLayout.ApplyNativeShape(super.Appearance[index], layout);
-                super.Appearance[index].FollowNativeHud = false;
                 reposition.Add(super.Appearance[index].Id);
             }
             targets.Clear(); localDragBar = null; localDragIndex = -1;
@@ -273,7 +274,28 @@ public sealed partial class NativeDragHotbar
         if (super is null) return;
         if (super.AppearanceMappingVersion == 0)
             ImGui.TextWrapped("此档案需要更新布局。点击下方按钮重新读取位置、样式和缩放，保留内容与按键。");
-        if (ImGui.Button("重新读取全部栏位布局"))
+        if (ImGui.Button("重新读取全部栏位布局…")) BeginSuperAppearanceRepair();
+        if (!superAppearanceConfirm) return;
+        ImGui.Separator();
+        ImGui.TextWrapped("重新读取游戏当前的全部 10 条栏位布局？这会覆盖当前配置中的位置、格数样式、缩放和显示开关。内容与快捷键保留。");
+        ImGui.TextWrapped("只读取这一次，之后接管栏独立保存布局。本机其他角色使用同一套配置时，也会使用这些位置。");
+        ImGui.BeginDisabled(!WorkshopOperationValid);
+        if (ImGui.Button("确认重新读取全部布局")) ConfirmSuperAppearanceRepair();
+        ImGui.EndDisabled(); ImGui.SameLine();
+        if (ImGui.Button("取消##AppearanceRepair")) superAppearanceConfirm = false;
+    }
+
+    private void BeginSuperAppearanceRepair()
+    {
+        ClearSuperImport();
+        if (super is null || workshopLibrary is null || owner == 0 || readOnly || superReadOnly) return;
+        MarkWorkshopOperation(); superAppearanceConfirm = true;
+    }
+
+    private void ConfirmSuperAppearanceRepair()
+    {
+        if (!superAppearanceConfirm || !WorkshopOperationValid || super is null) { superAppearanceConfirm = false; return; }
+        superAppearanceConfirm = false;
         {
             try
             {
@@ -281,7 +303,6 @@ public sealed partial class NativeDragHotbar
                 foreach (var (index, appearance) in native)
                 {
                     NativeHotbarLayout.ApplyNativeAppearance(super.Appearance[index], appearance);
-                    super.Appearance[index].FollowNativeHud = true;
                     reposition.Add(super.Appearance[index].Id);
                 }
                 super.AppearanceMappingVersion = 1; super.NativeGeometryVersion = 1; superDirty = true;
@@ -327,7 +348,6 @@ public sealed partial class NativeDragHotbar
             if (clicked)
             {
                 NativeHotbarLayout.ApplyNativeShape(bar, layout);
-                bar.FollowNativeHud = false;
                 superDirty = true; reposition.Add(bar.Id);
             }
             ImGui.PopID();
@@ -363,16 +383,13 @@ public sealed partial class NativeDragHotbar
             ImGui.TextWrapped("隐藏空格不会移动其他格子；拖入内容时会临时显示空格。");
             var visible = bar.Visible;
             if (ImGui.Checkbox("显示此栏", ref visible)) { bar.Visible = visible; superDirty = true; }
-            var follow = bar.FollowNativeHud;
-            if (ImGui.Checkbox("跟随游戏栏位的位置、样式和缩放", ref follow))
-            { bar.FollowNativeHud = follow; superDirty = true; }
-            ImGui.TextWrapped("手动调整布局、位置或缩放后，会取消跟随。");
+            ImGui.TextWrapped("位置、样式和缩放会自动保存到当前配置，换角色或账号后保持一致。Alt + 左键可移动整栏。");
             DrawSuperNativeLayoutPicker(bar);
             if (ImGui.Button("读取本栏游戏样式")) InheritSuperLayouts(superSelectedBar);
             ImGui.SameLine();
             if (ImGui.Button("读取全部游戏样式")) InheritSuperLayouts(null);
             ImGui.TextWrapped("仅更新横竖排列，保留内容、按键和位置。");
-            var scale = bar.Scale; if (ImGui.SliderFloat("栏位缩放", ref scale, 0.5f, 2.5f, "%.2f")) { bar.Scale = scale; bar.FollowNativeHud = false; superDirty = true; }
+            var scale = bar.Scale; if (ImGui.SliderFloat("栏位缩放", ref scale, 0.5f, 2.5f, "%.2f")) { bar.Scale = scale; superDirty = true; }
             var opacity = bar.Opacity; if (ImGui.SliderFloat("背景不透明度（0 为透明）", ref opacity, 0, 1, "%.2f")) { bar.Opacity = opacity; superDirty = true; }
             if (ImGui.Button("把此栏移到屏幕中央"))
             {
@@ -380,7 +397,7 @@ public sealed partial class NativeDragHotbar
                 var pos = NativeHotbarLayout.SetPosition(view.WorkPos + Vector2.Max(Vector2.Zero, view.WorkSize - size) / 2,
                     view.WorkPos, view.WorkSize, size, out var ax, out var ay);
                 bar.X = pos.X - view.Pos.X; bar.Y = pos.Y - view.Pos.Y;
-                bar.AnchorX = bar.AnchorY = null; bar.FollowNativeHud = false; superDirty = true;
+                bar.AnchorX = bar.AnchorY = null; superDirty = true;
             }
         }
     }

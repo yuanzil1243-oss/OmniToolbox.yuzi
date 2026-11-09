@@ -25,6 +25,10 @@ try
     SharedProfilesChecks.Run(temp, Check, Reject);
     ClipboardBackupChecks.Run(temp, Check, Reject);
     WorkshopProfileChecks.Run(temp, Check, Reject);
+    TakeoverPlacementChecks.Run(temp, Check);
+    VisibilityPersistenceChecks.Run(temp, Check, Reject);
+    GameSettingsChecks.Run(temp, Check, Reject);
+    UiAndOptionRegressionChecks.Run(Check);
     SuperHotbarChecks.Run(temp, Check, Reject);
     CrashRegressionChecks.Run(Check, Reject);
     ExecutionCompatibilityChecks.Run(Check, Reject);
@@ -491,10 +495,18 @@ try
     NativeTooltipChecks.Compiled(assembly, Check);
     MacroDetailChecks.Compiled(assembly, Check);
     WorkshopProfileChecks.Compiled(root, assembly, Check);
+    TakeoverPlacementChecks.Compiled(assembly, Check);
+    VisibilityPersistenceChecks.Compiled(assembly, Check);
+    NativeMouseChecks.Compiled(assembly, structs, Check);
+    GameSettingsChecks.Compiled(assembly, structs, Check);
+    UiAndOptionRegressionChecks.Compiled(assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 4, 0, 0)
-        && version.FileVersion == "2.4.0.0" && version.ProductVersion == "2.4.0"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.4.0", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 0, 0)
+        && version.FileVersion == "2.5.0.0" && version.ProductVersion == "2.5.0"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.0", "module, assembly identity, assembly version and file version agree");
+    Check(new[] { "PollHotbarClickSample", "BeginHotbarClickSample", "RecordHotbarClick", "EndHotbarClickSample", "DrawHotbarClickDiagnostics", "RebuildHotbarInputWindows" }
+        .All(name => type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance) is null),
+        "release assembly excludes click sampling, diagnostic panel and manual rebuild tools");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
     if (Environment.GetEnvironmentVariable("NATIVE_DRAG_HOTBAR_CHECK_REPEATER") == "1")
     {
@@ -513,4 +525,3 @@ try
     Console.WriteLine($"{checks} checks passed. Native game interaction still requires in-game testing.");
 }
 finally { Directory.Delete(temp, true); }
-

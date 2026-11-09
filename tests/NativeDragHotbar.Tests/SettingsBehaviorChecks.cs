@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using System.Text.Json;
 using OmniToolbox.NativeDragHotbarLocal;
 
 internal static class SettingsBehaviorChecks
@@ -73,5 +74,30 @@ internal static class SettingsBehaviorChecks
         check(!settings.Contains("config.ShowHelp") && settings.Contains("ImGui.Selectable(command)")
             && settings.Contains("ImGui.TextWrapped(L(\"Help\")); ImGui.TextWrapped(L(\"Help2\"));"),
             "instructions render unconditionally and command labels are clickable copy targets");
+
+        var libraryField = type.GetField("workshopLibrary", flags)!;
+        var selected = Guid.NewGuid().ToString("N");
+        var library = JsonSerializer.Deserialize(JsonSerializer.Serialize(new { SelectedId = selected,
+            Profiles = new[] { new { Id = selected, Name = "确认测试" } } }), libraryField.FieldType)!;
+        libraryField.SetValue(module, library); type.GetField("owner", flags)!.SetValue(module, 1UL);
+        var unchanged = JsonSerializer.Serialize(archive, archiveField.FieldType);
+        Call("BeginSuperAppearanceRepair");
+        check((bool)Get("superAppearanceConfirm")! && JsonSerializer.Serialize(archive, archiveField.FieldType) == unchanged,
+            "opening reread-all confirmation does not access native game state or change saved layout");
+        type.GetField("superSettingsTab", flags)!.SetValue(module, 1); Call("EnterSuperSettingsTab", 0);
+        check(!(bool)Get("superAppearanceConfirm")! && JsonSerializer.Serialize(archive, archiveField.FieldType) == unchanged,
+            "leaving layout tab cancels reread-all without layout changes");
+        Call("BeginSuperAppearanceRepair"); type.GetField("owner", flags)!.SetValue(module, 2UL);
+        Call("ConfirmSuperAppearanceRepair");
+        check(!(bool)Get("superAppearanceConfirm")! && JsonSerializer.Serialize(archive, archiveField.FieldType) == unchanged,
+            "confirmation from another character cannot invoke native reread or overwrite geometry");
+        Call("BeginSuperAppearanceRepair"); library.GetType().GetProperty("SelectedId")!.SetValue(library, Guid.NewGuid().ToString("N"));
+        Call("ConfirmSuperAppearanceRepair");
+        check(!(bool)Get("superAppearanceConfirm")! && JsonSerializer.Serialize(archive, archiveField.FieldType) == unchanged,
+            "confirmation from another selected profile cannot invoke native reread or overwrite geometry");
+        library.GetType().GetProperty("SelectedId")!.SetValue(library, selected);
+        Call("BeginSuperAppearanceRepair"); Call("ClearWorkshopOperations"); Call("ConfirmSuperAppearanceRepair");
+        check(!(bool)Get("superAppearanceConfirm")! && JsonSerializer.Serialize(archive, archiveField.FieldType) == unchanged,
+            "cancelled confirmation cannot later execute a stale native reread");
     }
 }

@@ -100,12 +100,19 @@ internal sealed class NativeHotbarIconVisual
         var font = ImGui.GetFont();
         var alpha = color & 0xFF000000;
         at = new(MathF.Round(at.X), MathF.Round(at.Y)); size = Math.Max(6, MathF.Round(size));
-        // One physical-pixel edge, with no scaled multi-pixel halo or fractional glyph positions.
-        list.AddText(font, size, at + new Vector2(-1,0), alpha, text);
-        list.AddText(font, size, at + new Vector2(1,0), alpha, text);
-        list.AddText(font, size, at + new Vector2(0,-1), alpha, text);
-        list.AddText(font, size, at + new Vector2(0,1), alpha, text);
-        list.AddText(font, size, at, color, text);
+        // A managed game-font push changes the current window's atlas. The
+        // takeover background list must use that same atlas for its text.
+        list.PushTextureID(ImGui.GetWindowDrawList().CmdHeader.TextureId);
+        try
+        {
+            // One physical-pixel edge, with no scaled multi-pixel halo or fractional glyph positions.
+            list.AddText(font, size, at + new Vector2(-1,0), alpha, text);
+            list.AddText(font, size, at + new Vector2(1,0), alpha, text);
+            list.AddText(font, size, at + new Vector2(0,-1), alpha, text);
+            list.AddText(font, size, at + new Vector2(0,1), alpha, text);
+            list.AddText(font, size, at, color, text);
+        }
+        finally { list.PopTextureID(); }
     }
 
     private static void StyledText(ImDrawListPtr list, string text, Vector2 anchor, Vector2 align,

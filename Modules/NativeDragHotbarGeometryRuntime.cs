@@ -48,11 +48,11 @@ internal static unsafe class NativeBarGeometryReader
 public sealed partial class NativeDragHotbar
 {
     private bool superHudEditing;
-    private bool superGeometryWarning;
 
     private void UpdateSuperHudContext()
     {
         var editing = NativeBarGeometryReader.HudEditing();
+        if (editing) RestoreSuperVisibility();
         if (editing && !superHudEditing)
         {
             CancelSuperBindingEdit();
@@ -69,11 +69,8 @@ public sealed partial class NativeDragHotbar
     private void UpgradeSuperGeometry()
     {
         if (super is null || super.NativeGeometryVersion != 0) return;
-        // Capture all ten first: an unavailable addon never causes a partial geometry migration.
-        var snapshots = new NativeBarGeometry[10];
-        for (var b = 0; b < 10; b++) snapshots[b] = NativeBarGeometryReader.Read(b);
-        NativeBarGeometryMigration.Upgrade(super, snapshots); superDirty = true;
-        superStatus = "已重新锚定全部 10 栏原生尺寸和位置；内容、职业／公用档案、独立键位与透明度已保留。";
+        NativeBarGeometryMigration.Upgrade(super); superDirty = true;
+        superStatus = "已转换旧档案中保存的栏位坐标；位置沿用原档案，内容与快捷键保留。";
     }
 
     private void SetSuperLocked(bool locked)
@@ -94,49 +91,43 @@ public sealed partial class NativeDragHotbar
     private void DrawSuperBar(DragHotbar bar, int index, bool nativeDragging, bool supported)
     {
         var view = ImGui.GetMainViewport();
-        if (bar.FollowNativeHud)
-        {
-            try
-            {
-                if (NativeBarGeometryReader.Read(index).Store(bar)) superDirty = true;
-                superGeometryWarning = false;
-            }
-            catch (Exception error) when (error is InvalidOperationException or System.IO.InvalidDataException)
-            { superGeometryWarning = true; }
-        }
         var input = NativeBarInteraction.Input(true, superHudEditing) && !NativeWindowAtMouse;
         if (input && !super!.Locked && ReferenceEquals(movingBar, bar) && !nativeDragging
             && ImGui.IsMouseDown(ImGuiMouseButton.Left))
         {
-            bar.FollowNativeHud = false;
             bar.X += ImGui.GetIO().MouseDelta.X; bar.Y += ImGui.GetIO().MouseDelta.Y;
             superDirty = true;
         }
         var geometry = NativeBarGeometry.FromSaved(bar).OnViewport(view.Pos);
-        var margin = new Vector2(12 * geometry.Scale);
+        var revealEmpty = nativeDragging || localDragBar is not null;
+        var hasSurface = input && NativeBarInteraction.HasSurface(bar, index, revealEmpty);
+        var mouseInput = hasSurface && NativeBarInteraction.Hit(geometry, bar, index, ImGui.GetIO().MousePos, revealEmpty);
+        // Effects are drawn on the viewport background, so the input window needs no
+        // transparent effects margin. Keep its mouse eligibility stable when the pointer
+        // moves: ImGui resolves hover before this callback using the previous frame flags.
         var left = index == 0 ? new Vector2(34 * geometry.Scale, 0) : Vector2.Zero;
-        var windowMin = geometry.FirstFrame - margin - left;
+        var windowMin = geometry.FirstFrame - left;
         ImGui.SetNextWindowPos(windowMin, ImGuiCond.Always);
-        ImGui.SetNextWindowSize(geometry.Size + margin * 2 + left, ImGuiCond.Always);
+        ImGui.SetNextWindowSize(geometry.Size + left, ImGuiCond.Always);
         var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse
             | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoTitleBar
             | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
             | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoBringToFrontOnFocus;
-        if (!input) flags |= ImGuiWindowFlags.NoInputs;
+        if (!hasSurface) flags |= ImGuiWindowFlags.NoInputs;
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowMinSize, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.Alpha, ImGui.GetStyle().Alpha * NativeBarInteraction.Alpha(true, superHudEditing));
-        var contents = ImGui.Begin(BarLabel(bar) + "###NativeDragHotbar-" + bar.Id, flags);
-        SendHotbarWindowBack();
+        var contents = ImGui.Begin(HotbarInputWindowName(bar), flags);
+        PlaceHotbarInputWindow(mouseInput);
         try
         {
             if (!contents) return;
             if (input && !super!.Locked && replacing is null && !nativeDragging && ImGui.GetIO().KeyAlt
                 && ImGui.IsWindowHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem)
                 && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-            { movingBar = bar; bar.FollowNativeHud = false; superDirty = true; }
-            var list = ImGui.GetWindowDrawList();
+            { movingBar = bar; superDirty = true; }
+            var list = HotbarDrawList(true);
             DrawBelowNative(list, new(geometry.FirstFrame, geometry.FirstFrame + geometry.Size), () =>
             {
                 if (bar.Opacity > 0) list.AddRectFilled(geometry.FirstFrame, geometry.FirstFrame + geometry.Size,

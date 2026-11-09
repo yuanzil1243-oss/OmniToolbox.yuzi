@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace OmniToolbox.NativeDragHotbarLocal;
@@ -42,6 +43,20 @@ internal static class NativeBarInteraction
     public static bool Edit(bool takeover, bool locked, bool hudEditing) => !locked && (!takeover || !hudEditing);
     public static bool Input(bool takeover, bool hudEditing) => !takeover || !hudEditing;
     public static float Alpha(bool takeover, bool hudEditing) => takeover && hudEditing ? 0.4f : 1;
+
+    public static bool HasSurface(DragHotbar bar, int index, bool revealEmpty)
+        => index == 0 || !bar.HideEmpty || revealEmpty || bar.Slots.Any(slot => !slot.IsEmpty);
+
+    public static bool Hit(NativeBarGeometry geometry, DragHotbar bar, int index, Vector2 mouse, bool revealEmpty)
+    {
+        // The window has extra room for icon effects. That transparent margin is not a hit
+        // target, nor is a slot hidden by HideEmpty. It must not cover a neighbouring bar.
+        for (var slot = 0; slot < 12; slot++)
+            if ((!bar.HideEmpty || revealEmpty || !bar.Slots[slot].IsEmpty)
+                && new HotbarRect(geometry.Frame(slot), geometry.Frame(slot) + new Vector2(48 * geometry.Scale)).Contains(mouse))
+                return true;
+        return index == 0 && new HotbarRect(geometry.Lock, geometry.Lock + new Vector2(20, 24) * geometry.Scale).Contains(mouse);
+    }
 }
 
 internal readonly record struct NativeNodeTransform(Vector2 Position, Vector2 Scale, Vector2 Origin);
@@ -66,18 +81,19 @@ internal static class NativeNodeGeometry
 
 internal static class NativeBarGeometryMigration
 {
-    public static bool Upgrade(SuperHotbarDocument data, IReadOnlyList<NativeBarGeometry> snapshots)
+    public static bool Upgrade(SuperHotbarDocument data)
     {
         if (data.NativeGeometryVersion != 0) return false;
-        if (snapshots.Count != 10 || data.Appearance.Count != 10)
-            throw new InvalidDataException("必须完整采集 10 条原生栏才能迁移几何数据。");
+        if (data.Appearance.Count != 10)
+            throw new InvalidDataException("保存的布局必须包含全部 10 条栏位。");
+        // Old archives stored addon-root coordinates. Convert those saved coordinates,
+        // never recapture another character's native layout during a runtime upgrade.
+        var snapshots = data.Appearance.Select(bar => NativeBarGeometry.FromRoot(
+            new(bar.X, bar.Y), bar.Scale, bar.Columns, bar.Rows)).ToArray();
         foreach (var snapshot in snapshots) snapshot.Validate();
         for (var b = 0; b < 10; b++)
-        {
             snapshots[b].Store(data.Appearance[b]);
-            data.Appearance[b].FollowNativeHud = true;
-        }
-        data.AppearanceMappingVersion = 1; data.NativeGeometryVersion = 1;
+        data.NativeGeometryVersion = 1;
         return true;
     }
 }

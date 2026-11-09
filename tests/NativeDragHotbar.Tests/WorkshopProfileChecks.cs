@@ -218,8 +218,8 @@ internal static class WorkshopProfileChecks
         check(!bridge.GetFields(flags).Any(f => f.Name == "macroCopies") && bridge.GetMethod("ExecuteMacro", flags) is null,
             "compiled bridge allocates no snapshot macro copies for execution");
         check(Calls("OnSuperNativeDraw").Contains("PreventOriginal") && Calls("OnSuperNativeDraw").Contains("HudEditing")
-            && Calls("OnSuperNativeDraw").Contains("get_SuperActive") && !Calls("RestoreSuperVisibility").Any(),
-            "native hiding is draw-scoped, respects takeover/HUD state and releases without native node mutation");
+            && Calls("OnSuperNativeDraw").Contains("get_SuperActive") && Calls("RestoreSuperVisibility").Contains("ReleaseAll"),
+            "native hiding respects takeover/HUD state and releases transient mouse interception without changing visibility");
         check(!File.ReadAllText(Path.Combine(root, "Modules/NativeDragHotbarSuper.cs")).Contains("ToggleVisibility")
             && type.GetField("superHidden", flags) is null, "takeover never changes native root visibility or caches replaceable node pointers");
         foreach (var flow in new[] { "ExitSuperTakeover", "PauseSuper", "StopSuper", "ResetWorkshopRuntime", "UpdateSuper" })

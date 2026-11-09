@@ -23,7 +23,7 @@ internal sealed unsafe class NativeHotbarDetailTooltips : IDisposable
     private readonly Func<bool> uiVisible;
 
     internal NativeHotbarDetailTooltips() : this(() => (nint)AtkStage.Instance(),
-        bar => (nint)SuperNativeArchive.Addon(bar), () => RaptureAtkModule.Instance() != null && RaptureAtkModule.Instance()->IsUiVisible) { }
+        bar => (nint)SuperNativeArchive.Addon(bar), NativeHotbarUiContext.Visible) { }
 
     internal NativeHotbarDetailTooltips(Func<nint> stage, Func<int, nint> parent, Func<bool> visible)
     { stageAddress = stage; parentAddress = parent; uiVisible = visible; }
@@ -65,7 +65,7 @@ internal sealed unsafe class NativeHotbarDetailTooltips : IDisposable
 
     internal void BeginFrame() => ownership.BeginFrame();
     internal void EndFrame() { if (ownership.EndFrameNeedsRelease) Release(); }
-    internal void Tick(long now) { if (ownership.Expired(now)) Release(); }
+    internal void Tick(long now) { if (!uiVisible() || ownership.Expired(now)) Release(); }
 
     internal bool Show(NativeHotbarDetail detail, string text, int nativeBar, Vector2 min, Vector2 max, long now)
     {

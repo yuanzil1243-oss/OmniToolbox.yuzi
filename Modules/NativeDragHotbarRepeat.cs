@@ -44,7 +44,7 @@ public sealed partial class NativeDragHotbar
 
     private unsafe bool SuperInputAllowed()
     {
-        if (!SuperActive || NativeBarGeometryReader.HudEditing() || Environment.TickCount64 - superLastDraw > 500) return false;
+        if (!SuperActive || !NativeHotbarUiContext.Visible() || NativeBarGeometryReader.HudEditing() || Environment.TickCount64 - superLastDraw > 500) return false;
         var atk = RaptureAtkModule.Instance();
         return atk != null && atk->IsUiVisible && NativeHotbarBridge.IsGameForeground()
             && !atk->IsTextInputActive() && !ImGui.GetIO().WantTextInput
