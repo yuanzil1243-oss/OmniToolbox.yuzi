@@ -175,15 +175,7 @@ public sealed partial class NativeDragHotbar
         {
             if (entry.NativeType == 7)
             {
-                string text;
-                if (SuperBarIndex(bar) >= 0)
-                {
-                    // Takeover executes the captured macro, which can differ from the live
-                    // macro with the same address. Missing backups must not show live help.
-                    if (super is null || NativeHotbarMacroDetailRules.SavedMacro(super.Macros, entry.NativeId) is not { } saved) return false;
-                    text = string.Join('\n', saved.Lines); name = saved.Name;
-                }
-                else if (!NativeHotbarBridge.TryReadMacro(entry.NativeId, out text, out name)) return false;
+                if (!NativeHotbarBridge.TryReadMacro(entry.NativeId, out var text, out name)) return false;
                 if (bridge!.TryMacroDetail(text, out detail)) return true;
             }
             else if (bridge!.TryDetail(entry, out detail)) return true;

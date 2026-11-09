@@ -24,6 +24,7 @@ try
     SettingsBehaviorChecks.Run(Check);
     SharedProfilesChecks.Run(temp, Check, Reject);
     ClipboardBackupChecks.Run(temp, Check, Reject);
+    WorkshopProfileChecks.Run(temp, Check, Reject);
     SuperHotbarChecks.Run(temp, Check, Reject);
     CrashRegressionChecks.Run(Check, Reject);
     ExecutionCompatibilityChecks.Run(Check, Reject);
@@ -489,10 +490,11 @@ try
     ItemAndFontChecks.Compiled(assembly, Check);
     NativeTooltipChecks.Compiled(assembly, Check);
     MacroDetailChecks.Compiled(assembly, Check);
+    WorkshopProfileChecks.Compiled(root, assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 3, 0, 0)
-        && version.FileVersion == "2.3.0.0" && version.ProductVersion == "2.3.0"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.3.0", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 4, 0, 0)
+        && version.FileVersion == "2.4.0.0" && version.ProductVersion == "2.4.0"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.4.0", "module, assembly identity, assembly version and file version agree");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
     if (Environment.GetEnvironmentVariable("NATIVE_DRAG_HOTBAR_CHECK_REPEATER") == "1")
     {

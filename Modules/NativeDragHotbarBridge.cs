@@ -31,7 +31,7 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
     private Hook<ExecuteSlotDelegate>? executeSlotHook;
     internal Func<bool>? SuppressStandardExecution { get; set; }
     private NativeSlot* scratch;
-    private readonly Dictionary<SuperMacro, nint> macroCopies = [];
+
     private readonly NativeHotbarMacroDetails macroDetails = new();
     private delegate* unmanaged<RaptureHotbarModule*, NativeSlot*, byte> executeSlot;
     private delegate* unmanaged<uint*, short*, int, int, void> resolveInventory;
@@ -415,24 +415,6 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         executeSlot(module, scratch);
     }
 
-    public void ExecuteMacro(SuperMacro saved)
-    {
-        var shell = RaptureShellModule.Instance();
-        if (shell == null) return;
-        if (!macroCopies.TryGetValue(saved, out var address))
-        {
-            var copy = (RaptureMacroModule.Macro*)NativeMemory.AllocZeroed((nuint)sizeof(RaptureMacroModule.Macro));
-            copy->Name.Ctor();
-            for (var i = 0; i < 15; i++) copy->Lines[i].Ctor();
-            macroCopies.Add(saved, (nint)copy);
-            copy->Name.SetString(saved.Name); copy->IconId = saved.Icon; copy->MacroIconRowId = saved.IconRow;
-            for (var i = 0; i < 15; i++) copy->Lines[i].SetString(saved.Lines[i]);
-            address = (nint)copy;
-        }
-        // Use the game's macro interpreter, including waits/locking; never overwrite a real macro to execute a backup.
-        shell->ExecuteMacro((RaptureMacroModule.Macro*)address);
-    }
-
     private void PrepareAppearance(HotbarEntry entry)
     {
         scratch->Clear(); scratch->Set((NativeType)entry.NativeType, entry.NativeId);
@@ -517,13 +499,6 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         SuppressStandardExecution = null;
         Ready = false;
         drag.End();
-        foreach (var address in macroCopies.Values)
-        {
-            var macro = (RaptureMacroModule.Macro*)address;
-            macro->Name.Dtor(); for (var i = 0; i < 15; i++) macro->Lines[i].Dtor();
-            NativeMemory.Free(macro);
-        }
-        macroCopies.Clear();
         if (scratch == null) return;
         try { if (initialized) scratch->PopUpHelp.Dtor(); }
         finally { NativeMemory.Free(scratch); scratch = null; initialized = false; }

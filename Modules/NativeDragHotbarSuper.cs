@@ -22,18 +22,16 @@ public sealed partial class NativeDragHotbar
     private readonly SuperKeyEdges superEdges = new();
     private readonly NativeHotbarIconVisual superVisuals = new();
     private readonly NativeHotbarGameFonts superFonts = new();
-    private readonly Dictionary<string, (nint Node, bool Visible)> superHidden = [];
-    private readonly Dictionary<ulong, (SuperHotbarDocument Data, bool Recovered)> superUnsaved = [];
+    private bool superNativeDrawSuppressed;
     private ulong superOwner;
     private int superGroup = -1, superSelectedBar, superBindingSlot, superRecording = -1;
-    private bool superReady, superFault, superReadOnly, superDirty, superRecovered;
+    private bool superReady, superFault, superReadOnly, superDirty;
     private string superStatus = "尚未读取原生配置。", superBindingMessage = "";
     private long superSaveAt;
     private long superLastDraw;
     private long superLastSettings, superKeyAttempts, superNativeDrawBlocks;
     private string superLastInput = "无";
     private bool restoreContents = true, restoreBindings = true, restoreOptions, restoreMacros, restoreCross, restoreConfirm;
-    private bool superImportFromNative;
     private SuperShortcut? superBindingDraft;
     private int superRecordingInput;
     private bool superRecordArmed;
@@ -63,10 +61,11 @@ public sealed partial class NativeDragHotbar
 
     private void OnSuperNativeDraw(AddonEvent type, AddonArgs args)
     {
-        if (!SuperActive || !super!.HideNative) return;
+        if (!SuperActive || !super!.HideNative || NativeBarGeometryReader.HudEditing()) return;
         // This host event runs at the actual native Draw call. Root visibility alone can be
         // reset by the game's update and therefore is insufficient to replace a native bar.
         args.PreventOriginal();
+        superNativeDrawSuppressed = true;
         superNativeDrawBlocks++;
     }
     private void StopSuper()
@@ -81,7 +80,7 @@ public sealed partial class NativeDragHotbar
     {
         nativeDetails?.Release();
         builtInRepeat.Clear(); superResetConfirm = 0;
-        // Release execution and draw suppression BEFORE restoring any native nodes.
+        // Release execution and draw suppression before saving the disabled state.
         superReady = false;
         if (super is not null) { super.Enabled = false; superDirty = true; }
         superGroup = -1; ClearSuperImport(); restoreConfirm = false;
@@ -101,45 +100,14 @@ public sealed partial class NativeDragHotbar
     }
     private void EnsureSuper()
     {
-        if (superOwner == owner) return;
-        nativeDetails?.Release();
+        if (superOwner == owner && workshopRuntimeId == (workshopLibrary?.SelectedId ?? "")) return;
         SaveSuper(true);
-        if (superDirty && super is not null) superUnsaved[superOwner] = (super, superRecovered);
-        RestoreSuperVisibility(); superOwner = owner; super = null; ClearSuperImport();
-        superGroup = -1; superReady = false; superFault = false; superReadOnly = false; superDirty = false;
-        superRecovered = false; superRecording = -1; superPage = 0; restoreConfirm = false;
-        builtInRepeat.Clear(); superResetConfirm = 0;
-        superRestoreResult = ""; superRestoreBackupPath = "";
-        superRestorePreview = null; superRestoreSaveWatch = null;
-        superVisuals.Clear();
-        superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
-        superStatus = owner == 0 ? "请先登录角色。" : "尚未读取此角色的原生配置。";
-        if (owner != 0 && superUnsaved.Remove(owner, out var pending))
-        { super = pending.Data; superRecovered = pending.Recovered; superDirty = true; superStatus = "已恢复此角色尚未写入成功的内存档案，正在重试保存。"; return; }
-        if (owner == 0 || !File.Exists(SuperPath) && !File.Exists(SuperPath + ".bak")) return;
-        try
-        {
-            super = SuperHotbarStore.Load(SuperPath, owner, out superRecovered);
-            superStatus = superRecovered ? "配置已从备份恢复，原文件已保留。" : "已加载此角色的接管配置。";
-        }
-        catch (Exception error) { superReadOnly = true; superStatus = "档案不可读，禁止自动覆盖：" + error.Message; }
+        BindWorkshopCharacter();
     }
 
     private void SaveSuper(bool force)
     {
-        if (!superDirty || super is null || superOwner == 0 || superReadOnly) return;
-        if (!force && Environment.TickCount64 < superSaveAt) return;
-        try
-        {
-            SuperHotbarStore.Save(SuperPath, super, superOwner, superRecovered);
-            superDirty = false; superRecovered = false; superSaveAt = Environment.TickCount64 + 1000;
-        }
-        catch (Exception error)
-        {
-            superStatus = "热键栏工坊保存失败，修改仍保留在内存：" + error.Message;
-            superSaveAt = Environment.TickCount64 + 5000;
-            DalamudServices.PluginLog.Error(error, "热键栏工坊保存失败");
-        }
+        SaveWorkshop(force);
     }
 
     private unsafe void UpdateSuper(IFramework framework)
@@ -249,31 +217,13 @@ public sealed partial class NativeDragHotbar
             for (var index = 0; index < 10; index++)
                 if (super.Appearance[index].Visible)
                     DrawSuperBar(super.Appearance[index], index, nativeDragging, supported);
-        if (super.HideNative && !superHudEditing) HideSuperNativeBars(); else RestoreSuperVisibility();
+        if (!super.HideNative || superHudEditing) RestoreSuperVisibility();
     }
-    private unsafe void HideSuperNativeBars()
+    private void RestoreSuperVisibility()
     {
-        for (var b = 0; b < 10; b++)
-        {
-            var addon = SuperNativeArchive.Addon(b); if (addon == null || addon->RootNode == null) continue;
-            var node = addon->RootNode; var name = SuperNativeArchive.AddonName(b);
-            if (!superHidden.TryGetValue(name, out var state) || state.Node != (nint)node)
-                superHidden[name] = ((nint)node, node->IsVisible());
-            node->ToggleVisibility(false);
-        }
-    }
-    private unsafe void RestoreSuperVisibility()
-    {
-        if (superHidden.Count == 0) return;
-        for (var b = 0; b < 10; b++)
-        {
-            var name = SuperNativeArchive.AddonName(b);
-            if (!superHidden.TryGetValue(name, out var saved)) continue;
-            var addon = SuperNativeArchive.Addon(b);
-            if (addon != null && addon->RootNode != null && (nint)addon->RootNode == saved.Node)
-                addon->RootNode->ToggleVisibility(saved.Visible);
-        }
-        superHidden.Clear();
+        // Each PreDraw decision is independent. Never change RootNode visibility or persist
+        // a cached flag: addon rebuilds, HUD editing and job transitions remain game-owned.
+        superNativeDrawSuppressed = false;
     }
 
     private void DrawSuperSlotOverlay(DragHotbar bar, int slot, Vector2 min, Vector2 max)

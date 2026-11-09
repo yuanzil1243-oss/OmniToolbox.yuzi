@@ -153,6 +153,17 @@ internal static unsafe class SuperNativeArchive
             appearance.HideEmpty = true;
             result.Appearance.Add(appearance);
         }
+        result.Macros = CaptureMacros(owner);
+        result.MacroBackupCharacter = owner.ToString("X16");
+        result.MacroBackupName = DService.Instance().ObjectTable.LocalPlayer?.Name.ToString() ?? "";
+        result.MacroBackupAt = result.CapturedAt;
+        SuperHotbarRules.Validate(result, owner); return result;
+    }
+
+    public static List<SuperMacro> CaptureMacros(ulong owner)
+    {
+        Require(owner);
+        var result = new List<SuperMacro>();
         var macros = RaptureMacroModule.Instance();
         if (macros == null) throw new InvalidOperationException("宏配置尚未就绪，未建立不完整备份。");
         for (uint set = 0; set < 2; set++)
@@ -160,10 +171,10 @@ internal static unsafe class SuperNativeArchive
             {
                 var macro = macros->GetMacro(set, index);
                 if (macro == null) throw new InvalidOperationException("宏档案读取失败。");
-                result.Macros.Add(new() { Set = (int)set, Index = (int)index, Icon = macro->IconId, IconRow = macro->MacroIconRowId,
+                result.Add(new() { Set = (int)set, Index = (int)index, Icon = macro->IconId, IconRow = macro->MacroIconRowId,
                     Name = macro->Name.ToString(), Lines = macro->Lines.ToArray().Select(l => l.ToString()).ToList() });
             }
-        SuperHotbarRules.Validate(result, owner); return result;
+        return result;
     }
 
     private static SuperShortcut ReadKey(KeySetting key) =>

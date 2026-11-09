@@ -12,8 +12,6 @@ public sealed partial class NativeDragHotbar
     private int superSettingsTab = -1, superRequestedSettingsTab = -1;
     private bool superSettingsExpanded, sharedSettingsExpanded;
     private string superRestoreResult = "", superRestoreBackupPath = "";
-    private HotbarProfile? superImportExtensions;
-    private bool? superImportShowCommandMessages;
     private static readonly string[] SuperSettingsTabs =
         ["接管", "栏位与布局", "快捷键", "备份与导入", "还原到游戏", "扩展栏", "操作说明"];
     private static readonly int[] SuperSettingsTabOrder = [0, 1, 2, 5, 3, 4, 6];
@@ -31,7 +29,7 @@ public sealed partial class NativeDragHotbar
         ImGui.TextUnformatted($"热键栏工坊 {Version}");
         ImGui.SameLine();
         ImGui.TextDisabled(SuperActive ? "接管中" : super is { Enabled: true } ? "接管暂时暂停" : "未接管");
-        if (super is { Enabled: true } || superHidden.Count != 0)
+        if (super is { Enabled: true } || superNativeDrawSuppressed)
         {
             if (ImGui.Button("退出接管，使用游戏热键栏")) ExitSuperTakeover();
         }
@@ -96,18 +94,21 @@ public sealed partial class NativeDragHotbar
 
     private void BeginSuperNativeRead()
     {
-        ClearSuperImport(); superImportFromNative = true;
-        try { superImport = SuperNativeArchive.Capture(owner); }
+        ClearSuperImport();
+        try { superImport = SuperNativeArchive.Capture(owner); MarkWorkshopOperation(); }
         catch (Exception error) { superStatus = "读取原生配置失败：" + error.Message; }
     }
 
     private void ClearSuperImport()
-    { superImport = null; superImportExtensions = null; superImportShowCommandMessages = null; }
+    {
+        superImport = null;
+        pendingImport = null; ClearWorkshopOperations();
+    }
 
     private void DrawSuperOverviewSettings()
     {
-        if (owner == 0) { ImGui.TextWrapped("请先登录角色，再读取此角色的热键栏配置。"); return; }
-        ImGui.TextWrapped("首次使用：在“备份与导入”读取游戏配置，检查布局与快捷键，再启用接管。已有档案可直接启用。");
+        if (owner == 0) { ImGui.TextWrapped("请先登录角色。本机所有角色共用当前选中的配置。"); return; }
+        ImGui.TextWrapped("在“备份与导入”选择配置；首次使用可读取游戏配置，检查布局与快捷键后启用接管。切换角色继续使用当前选择。");
         if (super is null)
         {
             if (ImGui.Button("读取原生配置…")) { BeginSuperNativeRead(); superRequestedSettingsTab = 3; }
@@ -148,82 +149,7 @@ public sealed partial class NativeDragHotbar
         ImGui.TextWrapped("隐藏接管栏后，快捷键仍可使用。退出接管会恢复游戏热键栏；要把模块内容写回游戏，请到“还原到游戏”。");
     }
 
-    private void DrawSuperArchiveSettings()
-    {
-        if (owner == 0) { ImGui.TextWrapped("请先登录角色。"); return; }
-        ImGui.TextWrapped("读取游戏当前热键栏，或导入剪贴板中的备份。确认后替换此角色的接管档案，不改动游戏配置。");
-        if (ImGui.Button("读取原生配置…")) BeginSuperNativeRead();
-        ImGui.SameLine();
-        if (ImGui.Button("从剪贴板载入完整备份…"))
-            try { ClearSuperImport(); superImportFromNative = false;
-                var backup = SuperHotbarClipboardStore.Decode(ImGui.GetClipboardText(), owner);
-                superImport = backup.Takeover; superImportExtensions = backup.Extensions; superImportShowCommandMessages = backup.ShowCommandMessages; }
-            catch (Exception error) { superStatus = "备份读取失败：" + error.Message; }
-        if (superImport is not null)
-        {
-            ImGui.TextWrapped($"{(superImportFromNative ? "读取预览" : "导入预览")}：包含热键栏、{superImport.Bindings.Count} 组快捷键和 {superImport.Macros.Count} 份宏。确认后替换当前接管档案。");
-            DrawSuperBindingWarnings(superImport);
-            if (superImportExtensions is { } extensions)
-                ImGui.TextWrapped($"同时导入 {extensions.Bars.Count} 条扩展栏，将替换本机所有角色共用的扩展栏设置。");
-            if (ImGui.Button(superImportFromNative ? "确认保存读取结果" : "确认导入档案"))
-            {
-                try
-                {
-                    RestoreSuperVisibility();
-                    SuperHotbarRules.UpgradePresentation(superImport, SuperHotbarKeyMapRuntime.Current);
-                    superImport.Enabled = false;
-                    SuperHotbarClipboardStore.Save(System.IO.Path.GetDirectoryName(SuperPath)!,
-                        new(superImport, superImportExtensions, superImportShowCommandMessages), owner, superReadOnly || superRecovered, recovering);
-                    super = superImport;
-                    if (superImportExtensions is { } importedExtensions)
-                    {
-                        profile = importedExtensions; profileLoaded = true; readOnly = false; recovering = false; dirty = false; saveError = "";
-                        if (superImportShowCommandMessages is { } messages) { config.ShowCommandMessages = messages; superHostResetDirty = true; }
-                        selected = 0; pendingImport = null; reposition.Clear(); layoutBarId = "";
-                        targets.Clear(); received.Clear(); replacing = null; CloseEditor(); movingBar = null; localDragBar = null;
-                    }
-                    ClearSuperImport(); superGroup = -1; superReady = false;
-                    superReadOnly = false; superFault = false; superDirty = false; superRecovered = false;
-                    superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
-                    superRequestedSettingsTab = 0;
-                    superStatus = (superImportFromNative ? "读取结果已保存。" : "备份导入已保存。")
-                        + "检查布局与快捷键后，可到“接管”启用。";
-                    if (SuperHotbarRules.UnsupportedBindings(super).Any())
-                        superStatus += " 部分按键需要到“快捷键”重新录制。";
-                }
-                catch (Exception error)
-                {
-                    if (error is SuperClipboardImportException { RolledBack: false })
-                    { superFault = true; superReady = false; readOnly = true; superReadOnly = true; }
-                    superStatus = (superImportFromNative ? "读取结果未保存：" : "备份导入未启用：") + error.Message;
-                }
-            }
-            ImGui.SameLine(); if (ImGui.Button(superImportFromNative ? "取消读取" : "取消导入")) ClearSuperImport();
-        }
-        DrawSuperResetSettings();
-        if (super is null) return;
-        ImGui.Separator();
-        if (ImGui.Button("复制完整档案到剪贴板"))
-            try { ImGui.SetClipboardText(SuperHotbarStore.Encode(super, owner)); superStatus = "接管档案已复制，包含宏，不含扩展栏。"; }
-            catch (Exception error) { superStatus = error.Message; }
-        ImGui.SameLine();
-        ImGui.BeginDisabled(!profileLoaded || readOnly);
-        if (ImGui.Button("连同扩展栏一起复制"))
-            try { ImGui.SetClipboardText(SuperHotbarClipboardStore.Encode(super, owner, profile, config.ShowCommandMessages)); superStatus = "接管档案和全部扩展栏已复制，可从本页导入。"; }
-            catch (Exception error) { superStatus = error.Message; }
-        ImGui.EndDisabled();
-        ImGui.BeginDisabled(superReadOnly);
-        if (ImGui.Button("立即保存／重试"))
-        {
-            superDirty = true; SaveSuper(true);
-            if (!superDirty) superStatus = "接管档案已保存到本机。";
-        }
-        ImGui.EndDisabled();
-        ImGui.TextWrapped("设置会自动保存；此按钮立即保存当前接管档案，或在保存失败后重试，不会写回游戏。");
-        if (DateTimeOffset.TryParse(super.CapturedAt, out var captured))
-            ImGui.TextWrapped($"上次读取游戏配置：{captured.ToLocalTime():yyyy-MM-dd HH:mm}");
-        ImGui.TextWrapped("左侧按钮仅复制接管档案；右侧同时包含全部扩展栏。粘贴到文本文件中可另存备份。");
-    }
+    private void DrawSuperArchiveSettings() => DrawWorkshopArchiveSettings();
 
     private bool DrawSuperHelpSettings()
     {

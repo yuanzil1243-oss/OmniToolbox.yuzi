@@ -77,6 +77,9 @@ internal sealed class SuperHotbarDocument
     public int SchemaVersion { get; set; } = 1;
     public string Character { get; set; } = "";
     public string CapturedAt { get; set; } = "";
+    public string MacroBackupCharacter { get; set; } = "";
+    public string MacroBackupName { get; set; } = "";
+    public string MacroBackupAt { get; set; } = "";
     public bool Enabled { get; set; }
     public bool Show { get; set; } = true;
     public bool HideNative { get; set; } = true;
@@ -160,6 +163,12 @@ internal static class SuperHotbarRules
     {
         if (data.SchemaVersion != 1 || data.Character != character.ToString("X16") || character == 0)
             throw new InvalidDataException("热键栏工坊配置版本或角色身份不匹配。");
+        if (data.MacroBackupCharacter is null || data.MacroBackupName is null || data.MacroBackupAt is null
+            || data.MacroBackupName.Length > 256 || data.MacroBackupAt.Length > 64
+            || data.MacroBackupCharacter.Length != 0 && (data.MacroBackupCharacter.Length != 16
+                || !ulong.TryParse(data.MacroBackupCharacter, System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out var macroOwner) || macroOwner == 0))
+            throw new InvalidDataException("用户宏备份来源无效。");
         if (!Guid.TryParse(data.NativeStructsId, out _) || data.FirstPage is < 0 or > 9 || data.AppearanceMappingVersion is < 0 or > 1
             || data.KeyboardEncodingVersion is < 0 or > 1 || data.AppearanceDefaultsVersion is < 0 or > 1
             || data.EmptySlotDefaultsVersion is < 0 or > 1

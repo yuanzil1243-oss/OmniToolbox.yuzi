@@ -62,7 +62,7 @@ internal static class MacroDetailChecks
         check(ReferenceEquals(NativeHotbarMacroDetailRules.SavedMacro([personal, shared], 0), personal)
             && ReferenceEquals(NativeHotbarMacroDetailRules.SavedMacro([personal, shared], 256), shared)
             && NativeHotbarMacroDetailRules.SavedMacro([personal, shared], 1) is null,
-            "takeover uses exact saved macro bank and slot; absent saved content stays absent");
+            "backup lookup preserves exact macro bank and slot; absent backup content stays absent");
         Expect(string.Join('\n', personal.Lines), targets[new("技能B", "action")], "captured macro content resolves its own skill");
         personal.Lines[0] = "/item 药品";
         Expect(string.Join('\n', personal.Lines), item, "edited macro content resolves new target without retaining old skill");
@@ -74,9 +74,9 @@ internal static class MacroDetailChecks
         const string ns = "OmniToolbox.NativeDragHotbarLocal.";
         var module = assembly.GetType(ns + "NativeDragHotbar", true)!;
         var calls = ItemAndFontChecks.Calls(module.GetMethod("TrySlotDetail", flags)!).ToArray();
-        check(calls.Contains("SavedMacro") && calls.Contains("TryReadMacro") && calls.Contains("TryMacroDetail") && calls.Contains("TryDetail")
+        check(!calls.Contains("SavedMacro") && calls.Contains("TryReadMacro") && calls.Contains("TryMacroDetail") && calls.Contains("TryDetail")
             && !calls.Any(x => x.StartsWith("Execute") || x is "SetString" or "SaveFile"),
-            "compiled hover chooses captured/live macro sources and native/command targets without executing or writing macros");
+            "compiled hover uses live macros for both bar kinds without executing or writing macros");
         var bridge = assembly.GetType(ns + "NativeHotbarBridge", true)!;
         calls = ItemAndFontChecks.Calls(bridge.GetMethod("TryReadMacro", flags)!).ToArray();
         check(Array.IndexOf(calls, "TryMacroAddress") < Array.IndexOf(calls, "GetMacro")

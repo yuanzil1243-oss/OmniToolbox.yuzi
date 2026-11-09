@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.3.0";
+    public const string Version = "2.4.0";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -30,10 +30,10 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         ["Title"] = "热键栏工坊",
         ["Description"] = "接替游戏原生热键栏，支持自由布局、独立快捷键、职业切换与扩展栏，提供连点、备份和还原。",
         ["Help"] = "从游戏中拖入技能、道具或宏，左键使用，右键编辑；Alt + 左键移动整栏。接管栏需先解锁才能编辑和拖动。",
-        ["Help2"] = "接管栏按角色保存，并随职业切换；扩展栏在本机所有角色间共用。设置会自动保存。",
+        ["Help2"] = "本机所有角色共用当前选中的配置，栏位内容随职业切换。设置会自动保存。",
         ["ShowCommandMessages"] = "显示指令文本提示",
-        ["Waiting"] = "请先登录角色。扩展栏由本机所有角色共用。",
-        ["Readonly"] = "共享配置、备份或旧配置迁移读取失败，已暂停编辑和写入。详情见日志。",
+        ["Waiting"] = "请先登录角色。扩展栏保存在当前选中的本机配置里。",
+        ["Readonly"] = "本机配置库无法读取，已暂停编辑和写入。请到“备份与导入”查看并重试。",
         ["Migrated"] = "已建立本地共享配置，迁移来源：{0}；旧文件已保留。",
         ["SaveError"] = "保存失败，修改仍在内存中。请检查日志与配置目录权限。",
         ["Retry"] = "重试保存",
@@ -144,7 +144,6 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
     public override bool HasSettings => true;
     private string L(string key, params object[] args)
     { var value = OmniLoc.Get(this, key); return args.Length == 0 ? value : string.Format(value, args); }
-    private string ProfilePath => HotbarSharedProfiles.PathFor(DalamudServices.PluginInterface.GetPluginConfigDirectory());
     private string BarLabel(DragHotbar bar) => SuperBarIndex(bar) is var native and >= 0
         ? $"#{native + 1} {bar.Name}{(native == 0 ? $"（页 {superPage + 1}）" : "")} · {(super!.Shared[native == 0 ? superPage : native] ? "公用" : "职业专属")}" : $"#{profile.Bars.IndexOf(bar) + 1} {bar.Name}";
 
@@ -260,44 +259,17 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
     {
         var service = DService.Instance();
         var id = service.ClientState.IsLoggedIn && service.PlayerState.IsLoaded ? service.PlayerState.ContentId : 0;
-        if (owner == id) return;
+        if (owner == id) { EnsureWorkshopLibrary(); return; }
         Save();
         owner = id;
         selected = 0; targets.Clear(); received.Clear(); replacing = null; CloseEditor(); localDragBar = null; movingBar = null;
         pendingImport = null; importOwner = 0; layoutBarId = "";
-        // Character identity only guards game interaction and pending edits. It never selects
-        // the persisted profile, and a character switch must not discard unsaved shared changes.
-        if (id == 0 || profileLoaded) return;
-        readOnly = false; recovering = false; saveError = "";
-        try
-        {
-            profile = HotbarSharedProfiles.Load(DalamudServices.PluginInterface.GetPluginConfigDirectory(),
-                id, out recovering, out var migratedFrom);
-            profileLoaded = true;
-            dirty = profile.NeedsUpgradeSave | PrepareEntryIcons();
-            Save();
-            if (migratedFrom is not null)
-            {
-                DalamudServices.PluginLog.Information("热键栏工坊：旧配置迁移到本地共享配置，来源 {Source}", migratedFrom);
-                if (!dirty) Notify(L("Migrated", Path.GetFileName(migratedFrom)));
-            }
-        }
-        catch (Exception error)
-        { profileLoaded = false; readOnly = true; DalamudServices.PluginLog.Error(error, "热键栏工坊：共享配置加载或迁移失败"); }
+        EnsureWorkshopLibrary();
     }
 
     private void Save()
     {
-        if (dirty && super is not null && superOwner == owner) superDirty = true;
-        SaveSuper(false);
-        if (!dirty || !profileLoaded || readOnly) return;
-        try
-        {
-            PrepareEntryIcons();
-            HotbarProfileStore.Save(ProfilePath, profile, HotbarSharedProfiles.Owner, recovering);
-            dirty = false; recovering = false; saveError = "";
-        }
-        catch (Exception error) { saveError = error.Message; DalamudServices.PluginLog.Error(error, "热键栏工坊：配置保存失败"); }
+        SaveWorkshop(false);
     }
 
     private void Notify(string value) { notice = value; noticeUntil = Environment.TickCount64 + 4500; }
@@ -364,7 +336,6 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
                 ImGui.EndPopup();
             }
         }
-        hostChanged |= DrawTransferSettings();
         selected = Math.Clamp(selected, 0, Math.Max(0, profile.Bars.Count - 1));
         if (profile.Bars.Count > 0)
         {
@@ -382,77 +353,6 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         if (noticeUntil > Environment.TickCount64) ImGui.TextWrapped(notice);
         Save();
         return hostChanged;
-    }
-
-    private bool DrawTransferSettings()
-    {
-        var hostChanged = false;
-        ImGui.BeginDisabled(profile.Bars.Count == 0);
-        if (ImGui.Button(L("ExportCurrent"))) ExportSettings(selected);
-        ImGui.SameLine();
-        if (ImGui.Button(L("ExportAll"))) ExportSettings(null);
-        ImGui.EndDisabled();
-        ImGui.SameLine();
-        if (ImGui.Button(L("ImportClipboard")))
-        {
-            pendingImport = null;
-            try
-            {
-                pendingImport = HotbarTransfer.Parse(ImGui.GetClipboardText());
-                importOwner = owner;
-                importGlobalSettings = false;
-            }
-            catch (Exception error) { Notify(L("TransferError", error.Message)); }
-        }
-        if (pendingImport is null) return hostChanged;
-        ImGui.Separator();
-        ImGui.TextWrapped(L("ImportPreview", pendingImport.Bars.Count,
-            pendingImport.Bars.Sum(bar => bar.SlotCount),
-            pendingImport.Bars.Sum(bar => bar.Slots.Count - bar.SlotCount)));
-        foreach (var bar in pendingImport.Bars)
-            ImGui.TextUnformatted($"{bar.Name} · {bar.Columns} × {bar.Rows} · "
-                + $"{bar.Slots.Count(slot => !slot.IsEmpty)} 个已配置格子");
-        ImGui.TextWrapped(L("ImportNotice"));
-        if (pendingImport.ShowAllBars.HasValue || pendingImport.ShowCommandMessages.HasValue)
-            ImGui.Checkbox(L("ImportGlobal"), ref importGlobalSettings);
-        var exceedsLimit = profile.Bars.Count + pendingImport.Bars.Count > HotbarRules.MaxBars;
-        if (exceedsLimit) ImGui.TextWrapped(L("ImportLimit", profile.Bars.Count));
-        ImGui.BeginDisabled(exceedsLimit || importOwner != owner);
-        if (ImGui.Button(L("ConfirmImport")))
-        {
-            try
-            {
-                var imported = pendingImport;
-                selected = HotbarTransfer.Append(profile, HotbarSharedProfiles.Owner, imported);
-                sharedSettingsExpanded = true;
-                if (importGlobalSettings)
-                {
-                    if (imported.ShowAllBars is { } show) profile.Show = show;
-                    if (imported.ShowCommandMessages is { } messages)
-                    { hostChanged = config.ShowCommandMessages != messages; config.ShowCommandMessages = messages; }
-                }
-                targets.Clear(); received.Clear(); replacing = null; CloseEditor();
-                localDragBar = null; localDragIndex = -1; layoutBarId = "";
-                dirty = true; Save(); pendingImport = null;
-                Notify(L("Imported", imported.Bars.Count));
-            }
-            catch (Exception error) { Notify(L("TransferError", error.Message)); }
-        }
-        ImGui.EndDisabled();
-        ImGui.SameLine();
-        if (ImGui.Button(L("Cancel") + "##NDHImport")) pendingImport = null;
-        ImGui.Separator();
-        return hostChanged;
-    }
-
-    private void ExportSettings(int? index)
-    {
-        try
-        {
-            ImGui.SetClipboardText(HotbarTransfer.Export(profile, index, config.ShowCommandMessages, Version));
-            Notify(L("Exported"));
-        }
-        catch (Exception error) { Notify(L("TransferError", error.Message)); }
     }
 
     private void DrawBarSettings(DragHotbar bar)
@@ -934,13 +834,9 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         {
             if (!NativeHotbarBridge.IsGameForeground()) return;
             if (independent && entry.PreservedNativeType != 0) { Notify("此原生类型已备份，但本版暂未支持执行。"); return; }
-            if (independent && entry.NativeType == 7 && super is not null)
-            {
-                var macro = super.Macros.FirstOrDefault(m => m.Set == (entry.NativeId >> 8) && m.Index == (entry.NativeId & 255));
-                if (macro is null) throw new InvalidDataException("模块档案中缺少此宏正文，请重新备份或恢复宏。");
-                bridge?.ExecuteMacro(macro);
-            }
-            else if (entry.HasNative) bridge?.Execute(entry);
+            // Both bar types execute the current game's macro at this address. The captured
+            // macro body is exclusively a backup and must never replace live macro edits.
+            if (entry.HasNative) bridge?.Execute(entry);
             if (entry.Mode == HotbarEntryMode.Command)
                 foreach (var command in HotbarRules.Commands(entry.Command))
                 {

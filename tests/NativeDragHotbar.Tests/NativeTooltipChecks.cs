@@ -46,7 +46,9 @@ internal static class NativeTooltipChecks
         check(calls.Contains("TryNativeSlotTooltip")&&calls.Contains("DrawSlotTooltip"),"both bar kinds use native descriptions with text-only fallback for unsupported entries");
         check(ItemAndFontChecks.Calls(module.GetMethod("Draw",BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("EndFrame")
             &&ItemAndFontChecks.Calls(module.GetMethod("UpdateSuper",BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("Tick"),"draw cleanup and framework watchdog both release stale native descriptions");
-        check(new[]{"ExitSuperTakeover","PauseSuper","EnsureSuper"}.All(name=>ItemAndFontChecks.Calls(module.GetMethod(name,BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("Release")),
+        check(new[]{"ExitSuperTakeover","PauseSuper","ResetWorkshopRuntime"}.All(name=>ItemAndFontChecks.Calls(module.GetMethod(name,BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("Release"))
+            && ItemAndFontChecks.Calls(module.GetMethod("BindWorkshopCharacter",BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("ResetWorkshopRuntime")
+            && ItemAndFontChecks.Calls(module.GetMethod("EnsureSuper",BindingFlags.NonPublic|BindingFlags.Instance)!).Contains("BindWorkshopCharacter"),
             "exit, fault and character transitions explicitly release owned native help");
         var native=assembly.GetType(ns+"NativeHotbarDetailTooltips",true)!;
         calls=ItemAndFontChecks.Calls(native.GetMethod("Show",BindingFlags.NonPublic|BindingFlags.Instance)!).ToArray();
