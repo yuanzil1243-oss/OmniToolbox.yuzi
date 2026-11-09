@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows7.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>KeyRepeater</AssemblyName>
+    <Version>0.2.6</Version><AssemblyVersion>0.2.6.0</AssemblyVersion>
+    <FileVersion>0.2.6.0</FileVersion><InformationalVersion>0.2.6</InformationalVersion>
+    <Authors>Yuzi</Authors><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <DebugType>none</DebugType><Deterministic>true</Deterministic>
+    <OmniDir Condition="'$(OmniDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\OmniToolbox\1.1.9.9</OmniDir>
+    <DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\26-11-06-02</DalamudDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\Modules\KeyRepeater.cs" />
+    <Compile Include="..\..\Modules\KeyRepeaterController.cs" />
+    <Compile Include="..\..\Modules\KeyRepeaterInput.cs" />
+    <Reference Include="OmniToolbox.Common"><HintPath>$(OmniDir)\OmniToolbox.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="TreeTools"><HintPath>$(OmniDir)\TreeTools.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="OmenTools"><HintPath>$(OmniDir)\OmenTools.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Dalamud"><HintPath>$(DalamudDir)\Dalamud.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Dalamud.Bindings.ImGui"><HintPath>$(DalamudDir)\Dalamud.Bindings.ImGui.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="FFXIVClientStructs"><HintPath>$(DalamudDir)\FFXIVClientStructs.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="InteropGenerator.Runtime"><HintPath>$(DalamudDir)\InteropGenerator.Runtime.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

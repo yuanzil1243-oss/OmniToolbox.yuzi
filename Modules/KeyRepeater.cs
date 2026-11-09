@@ -1,134 +1,174 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.Input;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Interop.Windows.Helpers;
 using OmenTools;
-using FFXIVClientStructs.FFXIV.Component.GUI;
+using OmenTools.Interop.Windows.Helpers;
 using OmniToolbox.Common.Module.Abstractions;
 using OmniToolbox.Common.Module.Enums;
 using OmniToolbox.Common.Module.Models;
+using OmniToolbox.Config;
 using OmniToolbox.Host;
 using OmniToolbox.UI;
 using TreeTools.Lifecycle;
+using GameFramework = FFXIVClientStructs.FFXIV.Client.System.Framework.Framework;
 
 namespace OmniToolbox.KeyRepeaterOnline;
 
 [ModuleApiVersion(1)]
 public sealed unsafe class KeyRepeater : OmniModuleBase
 {
-    private readonly Dictionary<int, long> due = new();
-    private readonly HashSet<int> bindings = new();
+    public const string Version = "0.2.6";
+    private readonly KeyRepeatController repeat = new();
+    private KeyRepeatKeyMap? keyMap;
     private Settings config = new();
-    private string status = "已停用", error = "";
+    private string statusKey = "Disabled", errorKey = "";
     private long refreshAt;
-    private int running;
+    private int running, skipped;
     private bool faulted;
-    public override ModuleInfo Info { get; } = new()
-    {
-        Author = "Yuzi", Category = ModuleCategory.Item
-    };
+
+    public override ModuleInfo Info { get; } = new() { Author = "Yuzi", Category = ModuleCategory.Item };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
     {
-        ["Title"] = "按键连点", ["Description"] = "自动读取游戏技能栏主、副快捷键，按住任意已绑定按键或组合键即可连点。"
+        ["Title"] = "按键连点",
+        ["Description"] = "自动读取游戏技能栏主、副快捷键，支持“·”键、鼠标中键及侧键，按住已绑定按键即可连点。",
+        ["Enabled"] = "启用技能栏按住连点", ["Cps"] = "每秒次数（CPS）",
+        ["Version"] = "按键连点 {0}",
+        ["Instructions"] = "自动使用游戏原生技能栏主、副快捷键，无需逐键配置。支持“·”（波浪号键）、鼠标中键 M3 和侧键 M4/M5，以及 Ctrl/Alt/Shift 组合；修饰键必须完全匹配，左右侧同义。绑定修改后约 1 秒更新。",
+        ["Summary"] = "间隔 {0:0.#} ms · 已识别 {1} 组 · 连点中 {2} 组 · {3}",
+        ["Skipped"] = "另有 {0} 条不支持的键位未参与连点。",
+        ["PauseHelp"] = "聊天或插件文字输入、游戏未在前台时暂停。切回游戏、修改设置后须松开再按。速度受游戏帧率限制，不补发积压输入。首次输入由真实按下触发。",
+        ["WorkshopHelp"] = "本模块读取游戏原生绑定，不接入热键栏工坊的独立键位。使用工坊接管和内置连点时，请关闭本模块，避免两个连点同时运行。",
+        ["InputHelp"] = "模拟输入可能不被部分应用支持，使用时请遵守对应服务条款。本模块不保存或上传实际键盘输入。",
+        ["Reload"] = "重新读取技能栏绑定", ["Reset"] = "恢复默认（停用）",
+        ["Disabled"] = "已停用", ["Faulted"] = "异常暂停", ["WaitingForLogin"] = "等待角色登录",
+        ["BindingsUnavailable"] = "技能栏绑定不可用", ["NotForeground"] = "游戏未在前台",
+        ["UiUnavailable"] = "等待角色界面就绪", ["TextInput"] = "文字输入中",
+        ["Repeating"] = "正在连点", ["WaitingForKey"] = "等待按住技能栏快捷键",
+        ["InputError"] = "读取或发送输入失败，已暂停；查看日志后可重新读取绑定。"
     });
     public override bool HasSettings => true;
+
     protected override void OnStart(FeatureLifetime activation)
     {
         if (!float.IsFinite(config.Cps) || config.Cps < 1 || config.Cps > 30) config.Cps = 10;
-        faulted = false;
-        refreshAt = 0;
-        DalamudServices.Framework.Update += OnUpdate;
+        repeat.Clear(); keyMap = null; running = skipped = 0;
+        statusKey = "Disabled"; errorKey = ""; faulted = false; refreshAt = 0;
+        var framework = DalamudServices.Framework;
+        activation.OnStopping(() => framework.Update -= OnUpdate);
+        framework.Update += OnUpdate;
     }
     protected override void OnStop()
     {
-        DalamudServices.Framework.Update -= OnUpdate;
-        due.Clear(); bindings.Clear(); running = 0; status = "已停用";
+        repeat.Clear(); keyMap = null; running = skipped = 0;
+        statusKey = "Disabled"; errorKey = "";
     }
     public override bool DrawSettings()
     {
-        var changed = ImGui.Checkbox("启用技能栏按住连点", ref config.Enabled);
-        changed |= ImGui.SliderFloat("每秒次数（CPS）", ref config.Cps, 1, 30, "%.1f");
-        ImGui.TextWrapped("自动使用游戏技能栏已设置的主、副快捷键，无需逐键配置。左右 Ctrl/Alt/Shift 同义，修饰键必须完全匹配。修改游戏绑定后约 1 秒更新。");
-        ImGui.TextUnformatted($"间隔 {1000 / config.Cps:0.#} ms · 已识别 {bindings.Count} 组 · 连点中 {running} 组 · {status}");
-        ImGui.TextWrapped("聊天或插件文字输入时、游戏不在前台时暂停。速度受游戏帧率限制，不补发积压输入。");
-        ImGui.TextWrapped("模拟输入可能不被部分应用支持，使用时请遵守对应服务条款。本模块不保存或上传实际键盘输入。");
-        if (error.Length > 0) ImGui.TextWrapped(error);
-        if (ImGui.Button("重新读取技能栏绑定")) { faulted = false; refreshAt = 0; due.Clear(); }
+        var changed = ImGui.Checkbox(OmniLoc.Get(this, "Enabled"), ref config.Enabled);
+        ImGui.TextDisabled(string.Format(OmniLoc.Get(this, "Version"), Version));
+        var speedChanged = ImGui.SliderFloat(OmniLoc.Get(this, "Cps"), ref config.Cps, 1, 30, "%.1f");
+        changed |= ImGui.IsItemDeactivatedAfterEdit();
+        if (speedChanged) repeat.Suspend(Down);
+        ImGui.TextWrapped(OmniLoc.Get(this, "Instructions"));
+        ImGui.TextUnformatted(string.Format(OmniLoc.Get(this, "Summary"), 1000 / config.Cps,
+            repeat.BindingCount, running, OmniLoc.Get(this, statusKey)));
+        if (skipped > 0) ImGui.TextDisabled(string.Format(OmniLoc.Get(this, "Skipped"), skipped));
+        ImGui.TextWrapped(OmniLoc.Get(this, "PauseHelp"));
+        ImGui.TextWrapped(OmniLoc.Get(this, "WorkshopHelp"));
+        ImGui.TextWrapped(OmniLoc.Get(this, "InputHelp"));
+        if (errorKey.Length > 0) ImGui.TextWrapped(OmniLoc.Get(this, errorKey));
+        if (ImGui.Button(OmniLoc.Get(this, "Reload")))
+        { faulted = false; refreshAt = 0; keyMap = null; repeat.Suspend(Down); errorKey = ""; }
         ImGui.SameLine();
-        if (ImGui.Button("恢复默认（停用）")) { config = new(); changed = true; }
-        if (changed)
-        {
-            due.Clear(); running = 0; faulted = false;
-            error = "";
-        }
+        if (ImGui.Button(OmniLoc.Get(this, "Reset"))) changed |= ResetSettings();
+        if (changed) { repeat.Suspend(Down); running = 0; faulted = false; errorKey = ""; }
         return changed;
+    }
+    public override bool ResetSettings()
+    {
+        if (!config.Enabled && config.Cps == 10) return false;
+        config = new(); repeat.Suspend(Down); running = 0;
+        return true;
     }
     private void OnUpdate(IFramework framework)
     {
         running = 0;
-        if (faulted || !config.Enabled) { due.Clear(); status = faulted ? "异常暂停" : "已停用"; return; }
+        if (faulted || !config.Enabled) { Pause(faulted ? "Faulted" : "Disabled"); return; }
         try
         {
             var ui = UIModule.Instance();
-            if (ui == null || !DService.Instance().ClientState.IsLoggedIn) { Pause("等待角色登录"); return; }
+            if (ui == null || !DService.Instance().ClientState.IsLoggedIn) { Pause("WaitingForLogin"); return; }
+            GetWindowThreadProcessId(GetForegroundWindow(), out var process);
+            if (process != Environment.ProcessId) { Pause("NotForeground"); return; }
+            var atk = RaptureAtkModule.Instance();
+            if (atk == null || !atk->IsUiVisible) { Pause("UiUnavailable"); return; }
+            if (atk->IsTextInputActive() || ImGui.GetIO().WantTextInput) { Pause("TextInput"); return; }
+            if (Down(91) || Down(92)) { Pause("WaitingForKey"); return; }
             if (Environment.TickCount64 >= refreshAt)
             {
                 var input = ui->GetUIInputData();
-                if (input == null) { Pause("技能栏绑定不可用"); return; }
+                if (input == null) { Pause("BindingsUnavailable"); return; }
+                keyMap ??= ReadKeyMap();
                 var current = new HashSet<int>();
-                // Named InputId boundaries: bars 1–10, pet bar, duty actions; never UI/movement bindings.
+                skipped = 0;
+                // Only ordinary hotbar slots, pet bar and duty actions; never movement or UI bindings.
                 for (var id = (int)InputId.HOTBAR_1_1; id <= (int)InputId.HOTBAR_CONTENTS_ACT_R; id++)
                 {
                     var bind = input->GetKeybind((InputId)id);
                     if (bind == null) continue;
                     foreach (var setting in bind->KeySettings)
                     {
-                        var key = (int)setting.Key;
-                        if (key < 8 || key > 254 || key is 16 or 17 or 18 or 91 or 92 or >= 160 and <= 165) continue;
-                        if (((int)setting.KeyModifier & ~7) != 0) continue;
-                        current.Add(key | ((int)setting.KeyModifier << 8));
+                        if (keyMap.TryChord((int)setting.Key, (int)setting.KeyModifier, out var chord)) current.Add(chord);
+                        else if (setting.Key != SeVirtualKey.NO_KEY) skipped++;
                     }
                 }
-                if (!bindings.SetEquals(current)) { bindings.Clear(); bindings.UnionWith(current); due.Clear(); }
+                repeat.ReplaceBindings(current, Down);
                 refreshAt = Environment.TickCount64 + 1000;
             }
-            GetWindowThreadProcessId(GetForegroundWindow(), out var process);
-            if (process != Environment.ProcessId) { Pause("游戏未在前台"); return; }
-            if (RaptureAtkModule.Instance()->IsTextInputActive() || ImGui.GetIO().WantTextInput) { Pause("文字输入中"); return; }
             var modifiers = (Down(16) ? 1 : 0) | (Down(17) ? 2 : 0) | (Down(18) ? 4 : 0);
-            var now = Environment.TickCount64;
-            foreach (var binding in bindings)
-            {
-                var key = binding & 255;
-                if ((binding >> 8) != modifiers || !Down(key) || Down(91) || Down(92)) { due.Remove(binding); continue; }
-                running++;
-                if (due.TryGetValue(binding, out var next) && now < next) continue;
-                // Physical modifiers remain held; never inject modifier releases that corrupt the user's chord.
-                KeyEmulationHelper.SendKeypress(key);
-                due[binding] = now + Math.Max(1, (long)(1000 / config.Cps));
-            }
-            status = running > 0 ? "正在连点" : "等待按住技能栏快捷键";
+            running = repeat.Poll(Environment.TickCount64, config.Cps, modifiers, Down, Send);
+            statusKey = running > 0 ? "Repeating" : "WaitingForKey";
         }
         catch (Exception ex)
         {
-            faulted = true; Pause("异常暂停"); error = "读取或发送输入失败，请查看日志并重新读取绑定";
+            faulted = true; Pause("Faulted"); errorKey = "InputError";
             DalamudServices.PluginLog.Error(ex, "按键连点运行失败，已暂停");
         }
     }
-    private void Pause(string reason) { due.Clear(); running = 0; status = reason; }
+    private static KeyRepeatKeyMap ReadKeyMap()
+    {
+        var pairs = new List<(int Windows, int Native)>();
+        for (var key = 8; key < 240; key++)
+            if (DalamudServices.KeyState.TryGetSeVirtualKey(key, out var native)) pairs.Add((key, native));
+        return new(pairs);
+    }
+    private static void Send(int key)
+    {
+        if (key is not (4 or 5 or 6))
+        {
+            // Physical modifiers stay held; never inject modifier releases.
+            if (!KeyEmulationHelper.SendKeypress(key)) throw new InvalidOperationException("键盘输入发送失败");
+            return;
+        }
+        var game = GameFramework.Instance();
+        if (game == null || game->GameWindow == null || game->GameWindow->WindowHandle == 0)
+            throw new InvalidOperationException("游戏输入窗口不可用");
+        // Mouse bindings require mouse window messages, not WM_KEYDOWN/WM_KEYUP.
+        // Both messages are synchronous; the module never owns a held mouse/modifier state.
+        foreach (var message in KeyRepeatMouseInput.Messages(key, Down))
+            SendMessage(game->GameWindow->WindowHandle, message.Id, message.WParam, 0);
+    }
+    private void Pause(string reason) { repeat.Suspend(Down); running = 0; statusKey = reason; }
     private static bool Down(int key) => (GetAsyncKeyState(key) & 0x8000) != 0;
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint SendMessage(nint window, uint message, nuint wParam, nint lParam);
 
-    private sealed class Settings
-    {
-        public bool Enabled;
-        public float Cps = 10;
-    }
+    // Keep the API 1 Settings/config contract and old field names for host persistence.
+    private sealed class Settings { public bool Enabled; public float Cps = 10; }
 }
