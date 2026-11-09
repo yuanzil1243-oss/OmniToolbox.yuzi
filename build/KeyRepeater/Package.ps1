@@ -42,7 +42,7 @@ Copy-Item -LiteralPath (Join-Path $root "docs\KeyRepeater-$version.md") -Destina
 $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
 $entry.Version = $version
 $entry.Sha256 = $hash
-$entry.Localization.Source.Description = '自动读取游戏技能栏主、副快捷键，支持“·”键、鼠标中键及侧键，按住已绑定按键即可连点。'
+$entry.Localization.Source.Description = '自动读取技能栏主、副快捷键；支持原生“·”键及鼠标连点，并自动适配热键栏工坊的独立键盘快捷键。'
 $utf8 = [Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 12) + "`n", $utf8)
 Copy-Item -LiteralPath (Join-Path $stage $dllName) -Destination (Join-Path $Destination $dllName)

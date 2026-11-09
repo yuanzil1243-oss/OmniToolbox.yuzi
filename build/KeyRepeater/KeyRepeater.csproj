@@ -8,8 +8,8 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>KeyRepeater</AssemblyName>
-    <Version>0.2.6</Version><AssemblyVersion>0.2.6.0</AssemblyVersion>
-    <FileVersion>0.2.6.0</FileVersion><InformationalVersion>0.2.6</InformationalVersion>
+    <Version>0.2.7</Version><AssemblyVersion>0.2.7.0</AssemblyVersion>
+    <FileVersion>0.2.7.0</FileVersion><InformationalVersion>0.2.7</InformationalVersion>
     <Authors>Yuzi</Authors><IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType><Deterministic>true</Deterministic>
     <OmniDir Condition="'$(OmniDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\OmniToolbox\1.1.9.9</OmniDir>
@@ -19,6 +19,8 @@
     <Compile Include="..\..\Modules\KeyRepeater.cs" />
     <Compile Include="..\..\Modules\KeyRepeaterController.cs" />
     <Compile Include="..\..\Modules\KeyRepeaterInput.cs" />
+    <Compile Include="..\..\Modules\KeyRepeaterWorkshop.cs" />
+    <Compile Include="..\..\Modules\SuperHotbarRepeatProtocol.cs" />
     <Reference Include="OmniToolbox.Common"><HintPath>$(OmniDir)\OmniToolbox.Common.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TreeTools"><HintPath>$(OmniDir)\TreeTools.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="OmenTools"><HintPath>$(OmniDir)\OmenTools.dll</HintPath><Private>false</Private></Reference>

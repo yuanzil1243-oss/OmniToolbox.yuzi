@@ -130,6 +130,7 @@ Check(controller.ScheduledCount == 0 && controller.Poll(1000, 10, 0, down.Contai
     "send failure can be suspended without a surviving timer or stuck synthetic state");
 controller.Clear();
 Check(controller.ScheduledCount == 0 && controller.BindingCount == 0, "unload clears every binding and timer");
+checks += WorkshopTests.Run();
 
 // Inspect the actual compiled module with the installed host, without starting it or sending input.
 var omni = Environment.GetEnvironmentVariable("KEY_REPEATER_OMNI_DIR")
@@ -154,9 +155,9 @@ host.GetType("OmniToolbox.Common.Module.Runtime.ModuleContract", true)!
     .GetMethod("ValidateType", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [module]);
 Check(Activator.CreateInstance(module) is not null, "compiled module passes actual Omni API 1 contract and constructs without game services");
 var versions = FileVersionInfo.GetVersionInfo(dll);
-Check(assembly.GetName().Name == "KeyRepeater" && assembly.GetName().Version == new Version(0, 2, 6, 0)
-    && versions.FileVersion == "0.2.6.0" && versions.ProductVersion == "0.2.6"
-    && (string)module.GetField("Version")!.GetRawConstantValue()! == "0.2.6", "build, module, assembly and file versions agree");
+Check(assembly.GetName().Name == "KeyRepeater" && assembly.GetName().Version == new Version(0, 2, 7, 0)
+    && versions.FileVersion == "0.2.7.0" && versions.ProductVersion == "0.2.7"
+    && (string)module.GetField("Version")!.GetRawConstantValue()! == "0.2.7", "build, module, assembly and file versions agree");
 var settings = module.GetNestedType("Settings", BindingFlags.NonPublic)!;
 var config = module.GetField("config", BindingFlags.Instance | BindingFlags.NonPublic)!;
 var instance = Activator.CreateInstance(module)!;

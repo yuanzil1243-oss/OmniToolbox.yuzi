@@ -40,7 +40,7 @@ internal sealed class KeyRepeatController
             // Physical down already owns the first activation. Schedule the first repeat only.
             if (!due.TryGetValue(chord, out var next)) { due[chord] = now + interval; continue; }
             if (now < next) continue;
-            send(key);
+            send(chord); // IPC needs the full chord; native sending unwraps the Windows VK.
             due[chord] = now + interval; // never catch up with a burst after a slow frame
         }
         return running;

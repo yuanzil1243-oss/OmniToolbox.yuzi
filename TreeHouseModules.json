@@ -53,15 +53,15 @@
       "InternalName": "KeyRepeater",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "0.2.6",
+      "Version": "0.2.7",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.5",
       "File": "Modules/KeyRepeater.dll",
-      "Sha256": "4FE9E4C9C835C06881B82188EBE4280E5D6485A4A7729E33F705020B94560D7A",
+      "Sha256": "46A8005C382F9D60A524E057BC9A84B06F6A4A643A39C03BB0EAB3E877087906",
       "Localization": {
         "Source": {
           "Title": "按键连点",
-          "Description": "自动读取游戏技能栏主、副快捷键，支持“·”键、鼠标中键及侧键，按住已绑定按键即可连点。"
+          "Description": "自动读取技能栏主、副快捷键；支持原生“·”键及鼠标连点，并自动适配热键栏工坊的独立键盘快捷键。"
         }
       }
     },

@@ -6,5 +6,7 @@
   <ItemGroup>
     <Compile Include="..\..\Modules\KeyRepeaterInput.cs" Link="KeyRepeaterInput.cs" />
     <Compile Include="..\..\Modules\KeyRepeaterController.cs" Link="KeyRepeaterController.cs" />
+    <Compile Include="..\..\Modules\KeyRepeaterWorkshop.cs" Link="KeyRepeaterWorkshop.cs" />
+    <Compile Include="..\..\Modules\SuperHotbarRepeatProtocol.cs" Link="SuperHotbarRepeatProtocol.cs" />
   </ItemGroup>
 </Project>
