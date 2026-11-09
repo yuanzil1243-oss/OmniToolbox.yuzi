@@ -14,6 +14,7 @@ internal sealed class HotbarShareDocument
     public string ModuleVersion { get; set; } = "";
     public bool? ShowAllBars { get; set; }
     public bool? ShowHelp { get; set; }
+    public bool? ShowCommandMessages { get; set; }
     public List<DragHotbar> Bars { get; set; } = [];
 }
 
@@ -28,7 +29,7 @@ internal static class HotbarTransfer
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Export(HotbarProfile profile, int? selected, bool showHelp, string moduleVersion)
+    public static string Export(HotbarProfile profile, int? selected, bool showCommandMessages, string moduleVersion)
     {
         if (selected.HasValue && (selected.Value < 0 || selected.Value >= profile.Bars.Count))
             throw new InvalidDataException("没有选中可导出的热键栏。");
@@ -36,7 +37,7 @@ internal static class HotbarTransfer
         {
             Format = Format, Version = 1, ModuleVersion = moduleVersion,
             ShowAllBars = selected.HasValue ? null : profile.Show,
-            ShowHelp = selected.HasValue ? null : showHelp,
+            ShowCommandMessages = selected.HasValue ? null : showCommandMessages,
             Bars = (selected.HasValue ? [profile.Bars[selected.Value]] : profile.Bars)
                 .Select(bar => CopyBar(bar, false)).ToList(),
         };
@@ -56,7 +57,7 @@ internal static class HotbarTransfer
             return document;
         }
         catch (JsonException error)
-        { throw new InvalidDataException("不是有效的拖放热键栏导出文本。", error); }
+        { throw new InvalidDataException("不是有效的热键栏工坊导出文本。", error); }
     }
 
     public static int Append(HotbarProfile profile, ulong owner, HotbarShareDocument document)

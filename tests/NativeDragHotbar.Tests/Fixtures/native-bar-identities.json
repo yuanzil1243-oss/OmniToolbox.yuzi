@@ -1,0 +1,72 @@
+[
+  {
+    "Name": "_ActionBar",
+    "DisplayBar": 1,
+    "Loaded": true,
+    "Identity": 0,
+    "Layout": 1
+  },
+  {
+    "Name": "_ActionBar01",
+    "DisplayBar": 2,
+    "Loaded": true,
+    "Identity": 1,
+    "Layout": 1
+  },
+  {
+    "Name": "_ActionBar02",
+    "DisplayBar": 3,
+    "Loaded": true,
+    "Identity": 2,
+    "Layout": 2
+  },
+  {
+    "Name": "_ActionBar03",
+    "DisplayBar": 4,
+    "Loaded": true,
+    "Identity": 3,
+    "Layout": 1
+  },
+  {
+    "Name": "_ActionBar04",
+    "DisplayBar": 5,
+    "Loaded": true,
+    "Identity": 4,
+    "Layout": 2
+  },
+  {
+    "Name": "_ActionBar05",
+    "DisplayBar": 6,
+    "Loaded": true,
+    "Identity": 5,
+    "Layout": 2
+  },
+  {
+    "Name": "_ActionBar06",
+    "DisplayBar": 7,
+    "Loaded": true,
+    "Identity": 6,
+    "Layout": 2
+  },
+  {
+    "Name": "_ActionBar07",
+    "DisplayBar": 8,
+    "Loaded": true,
+    "Identity": 7,
+    "Layout": 1
+  },
+  {
+    "Name": "_ActionBar08",
+    "DisplayBar": 9,
+    "Loaded": true,
+    "Identity": 8,
+    "Layout": 4
+  },
+  {
+    "Name": "_ActionBar09",
+    "DisplayBar": 10,
+    "Loaded": true,
+    "Identity": 9,
+    "Layout": 2
+  }
+]

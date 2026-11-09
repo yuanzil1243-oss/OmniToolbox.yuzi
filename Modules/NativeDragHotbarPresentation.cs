@@ -33,7 +33,7 @@ internal static class HotbarPresentation
         return IsIconCommand(end < 0 ? line : line[..end]);
     }
 
-    private static bool TryTokens(string text, out List<string> tokens)
+    internal static bool TryTokens(string text, out List<string> tokens)
     {
         tokens = [];
         for (var i = 0; i < text.Length;)

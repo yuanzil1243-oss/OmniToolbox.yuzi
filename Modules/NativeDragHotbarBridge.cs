@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using FFXIVClientStructs.FFXIV.Client.UI.Shell;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools;
 using OmenTools.Extensions;
@@ -10,6 +14,7 @@ using OmniToolbox.Host;
 using TreeTools.Lifecycle;
 using NativeSlot = FFXIVClientStructs.FFXIV.Client.UI.Misc.RaptureHotbarModule.HotbarSlot;
 using NativeType = FFXIVClientStructs.FFXIV.Client.UI.Misc.RaptureHotbarModule.HotbarSlotType;
+using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace OmniToolbox.NativeDragHotbarLocal;
 
@@ -21,13 +26,20 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
     private Hook<AtkDragDropManager.Delegates.StartDragDrop>? startHook;
     private Hook<AtkDragDropManager.Delegates.Drop>? dropHook;
     private Hook<AtkDragDropManager.Delegates.CancelDragDrop>? cancelHook;
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate byte ExecuteSlotDelegate(RaptureHotbarModule* module, NativeSlot* slot);
+    private Hook<ExecuteSlotDelegate>? executeSlotHook;
+    internal Func<bool>? SuppressStandardExecution { get; set; }
     private NativeSlot* scratch;
+    private readonly Dictionary<SuperMacro, nint> macroCopies = [];
+    private readonly NativeHotbarMacroDetails macroDetails = new();
     private delegate* unmanaged<RaptureHotbarModule*, NativeSlot*, byte> executeSlot;
     private delegate* unmanaged<uint*, short*, int, int, void> resolveInventory;
     private bool handling;
     private bool initialized;
     public string LastDrag { get; private set; } = "尚未检测到原生拖动";
     public bool Ready { get; private set; }
+    public long SuppressedExecutions { get; private set; }
     public bool IsDragging => AtkStage.Instance() != null && AtkStage.Instance()->DragDropManager.IsDragging;
 
     public NativeHotbarBridge(Func<HotbarEntry, bool> receive, Func<bool> overTarget)
@@ -38,7 +50,6 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         var wrapper = (byte*)RaptureHotbarModule.MemberFunctionPointers.ExecuteSlotById;
         if (wrapper == null) throw new InvalidOperationException("原生热键执行入口未就绪。");
         var target = NativeHotbarExecution.Resolve(ReadCodeSnapshot(wrapper, 93), (long)wrapper);
-        // Confirm that the callee reads CommandType from its second argument (HotbarSlot*).
         var inner = (byte*)target;
         NativeHotbarExecution.ValidateSlotExecutor(ReadCodeSnapshot(inner, 25));
         executeSlot = (delegate* unmanaged<RaptureHotbarModule*, NativeSlot*, byte>)inner;
@@ -52,7 +63,7 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         }
         catch (Exception error)
         {
-            DalamudServices.PluginLog.Warning(error, "拖放热键栏：背包位置转换不可用，其他拖动来源仍可使用");
+            DalamudServices.PluginLog.Warning(error, "热键栏工坊：背包位置转换不可用，其他拖动来源仍可使用");
         }
         // Allocate our own working slot. Never borrow, overwrite, or save a real game hotbar slot.
         scratch = (NativeSlot*)NativeMemory.AllocZeroed((nuint)sizeof(NativeSlot));
@@ -74,18 +85,135 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         startHook.Enable();
         dropHook.Enable();
         cancelHook.Enable();
+        // Hook the verified pointer executor, covering indexed calls and direct native slot calls.
+        // The ClientStructs alias for the indexed wrapper has conflicting ABI verification metadata.
+        executeSlotHook = DService.Instance().Hook.HookFromAddress<ExecuteSlotDelegate>((nint)inner, OnExecuteSlot);
+        lifetime.Add(executeSlotHook);
+        lifetime.OnStopping(executeSlotHook.Disable);
+        executeSlotHook.Enable();
         Ready = true;
     }
 
     private static ReadOnlySpan<byte> ReadCodeSnapshot(byte* live, int length)
     {
-        // Other plugins may legitimately detour live entrypoints. Validate the host's
-        // original game-code copy, while resolving branches against LIVE addresses.
-        // Execution still uses the live entrypoint and its existing hook chain.
+        // Other plugins legitimately detour live entrypoints. Validate the original game text
+        // copied by the host before hooks, then install through the host's normal hook chain.
+        // Relative branches are still resolved against the LIVE address, never the copy address.
         var scanner = DService.Instance().SigScanner;
         var address = NativeHotbarExecution.SnapshotAddress((long)live, (long)scanner.Module.BaseAddress,
             (long)scanner.SearchBase, scanner.TextSectionOffset, scanner.TextSectionSize, length);
         return new ReadOnlySpan<byte>((void*)address, length);
+    }
+
+    private byte OnExecuteSlot(RaptureHotbarModule* module, NativeSlot* slot)
+    {
+        try
+        {
+            if (module != null && slot != null && SuppressStandardExecution?.Invoke() == true
+                && module == RaptureHotbarModule.Instance())
+            {
+                var first = (NativeSlot*)Unsafe.AsPointer(ref module->Hotbars[0].Slots[0]);
+                if (NativeHotbarSafety.IsOrdinarySlot((long)slot, (long)first, sizeof(NativeSlot)))
+                { SuppressedExecutions++; return 0; }
+            }
+        }
+        catch (Exception error)
+        {
+            SuppressStandardExecution = null;
+            Ready = false;
+            DalamudServices.PluginLog.Error(error, "热键栏工坊：原生执行拦截失败，已交回游戏");
+        }
+        return executeSlotHook!.Original(module, slot);
+    }
+
+    public HotbarEntry DescribeSaved(SuperSavedSlot saved)
+    {
+        if (saved.Type == 0) return new();
+        if (HotbarRules.IsSupportedType(saved.Type) && HotbarRules.IsValidId(saved.Type, saved.Id))
+        {
+            if (Describe((NativeType)saved.Type, saved.Id, out var result))
+            { if (saved.Type == 7) result.IconOverride = true; return result; }
+            return new() { NativeType = saved.Type, NativeId = saved.Id, IconId = 234001,
+                Name = $"原生类型 {saved.Type} / {saved.Id}", Tooltip = "当前角色暂时无法解析此动作的图标或名称，身份已保留。" };
+        }
+        return new() { PreservedNativeType = saved.Type, PreservedNativeId = saved.Id, IconId = 234001,
+            Name = $"已备份类型 {saved.Type} / {saved.Id}", Tooltip = "此类型暂未支持执行，原始数据会在还原时保留。" };
+    }
+
+    public NativeSlotState State(HotbarEntry entry)
+    {
+        if (!entry.HasNative || scratch == null || UIModule.Instance() == null) return NativeSlotState.Neutral;
+        if (entry.NativeType == (byte)NativeType.GeneralAction) return GeneralState(entry);
+        if (entry.NativeType == (byte)NativeType.Item) return ItemState(entry);
+        if (entry.NativeType != 1) return AvailabilityState(entry);
+        var actions = DalamudServices.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Action>();
+        if (!NativeHotbarSafety.CanReadCombatState(entry.NativeType, entry.NativeId,
+            actions.GetRowOrDefault(entry.NativeId) is not null)) return NativeSlotState.Neutral;
+        PrepareAppearance(entry);
+        if (!NativeHotbarSafety.CanReadCombatState((byte)scratch->ApparentSlotType, scratch->ApparentActionId,
+            actions.GetRowOrDefault(scratch->ApparentActionId) is not null)) return NativeSlotState.Neutral;
+        var seconds = 0;
+        var percent = scratch->GetSlotActionCooldownPercentage(&seconds, 0);
+        var level = DService.Instance().ObjectTable.LocalPlayer?.Level ?? 0;
+        var maxCharges = level == 0 ? 1u : Math.Max(1u, ActionManager.GetMaxCharges(scratch->ApparentActionId, level));
+        var charges = scratch->GetApparentIconRecastCharges();
+        var manager = ActionManager.Instance();
+        if (maxCharges > 1)
+        {
+            // Never fall back to the misleading full-charge timer if the group is unavailable.
+            percent = seconds = 0;
+            if (manager != null)
+            {
+                var group = manager->GetRecastGroup((int)ActionType.Action, scratch->ApparentActionId);
+                // Current client ActionManager has exactly 80 RecastDetail entries.
+                if (group is >= 0 and < 80)
+                    (percent, seconds) = NativeIconVisualRules.NextCharge(manager->GetRecastTimeForGroup(group),
+                        manager->GetRecastTimeElapsed(ActionType.Action, scratch->ApparentActionId), maxCharges, charges);
+            }
+        }
+        return new(Math.Clamp(percent, 0, 100), Math.Max(seconds, 0), charges, maxCharges,
+            scratch->IsActionHighlighted(scratch->ApparentSlotType, scratch->ApparentActionId),
+            scratch->IsSlotUsable(scratch->ApparentSlotType, scratch->ApparentActionId));
+    }
+
+    private NativeSlotState GeneralState(HotbarEntry entry)
+    {
+        // GeneralAction IDs are NOT Action IDs. In particular, never pass them into charge getters.
+        var row = DalamudServices.DataManager.GetExcelSheet<Lumina.Excel.Sheets.GeneralAction>().GetRowOrDefault(entry.NativeId);
+        if (!NativeHotbarSafety.CanReadGeneralState(entry.NativeType, entry.NativeId, row is not null)) return NativeSlotState.Neutral;
+        PrepareAppearance(entry);
+        // The native slot reader converts GeneralAction to its own recast group (e.g. Sprint 56,
+        // Return 57). It also handles commands without an Action row. No charge getter is used.
+        var seconds = 0;
+        var percent = scratch->GetSlotActionCooldownPercentage(&seconds, 0);
+        return new(Math.Clamp(percent, 0, 100), Math.Max(seconds, 0), 0, 1, false,
+            scratch->IsSlotUsable(scratch->ApparentSlotType, scratch->ApparentActionId));
+    }
+
+    private NativeSlotState ItemState(HotbarEntry entry)
+    {
+        if (!NativeHotbarItems.TryItem(entry.NativeId, out var baseId, out _)) return NativeSlotState.Neutral;
+        var row = DalamudServices.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Item>().GetRowOrDefault(baseId);
+        if (!NativeHotbarSafety.CanReadItemState(entry.NativeType, entry.NativeId, row is not null)) return NativeSlotState.Neutral;
+        PrepareAppearance(entry);
+        // The native slot recast getter dispatches Item separately and includes shared potion recasts.
+        // Never send an item ID into combat-action or charge getters.
+        var seconds = 0;
+        var percent = scratch->GetSlotActionCooldownPercentage(&seconds, 0);
+        var quantity = scratch->GetCostValueForSlot(NativeType.Item, entry.NativeId);
+        return NativeHotbarItems.State(percent, seconds, quantity,
+            scratch->IsSlotUsable(scratch->ApparentSlotType, scratch->ApparentActionId));
+    }
+
+    private NativeSlotState AvailabilityState(HotbarEntry entry)
+    {
+        // The native usability dispatcher covers mounts, companions, event/duty items and commands.
+        // It does not call the combat-only charge getter. Unknown/preserved entries remain neutral.
+        if (!entry.HasNative) return NativeSlotState.Neutral;
+        PrepareAppearance(entry);
+        if (scratch->ApparentSlotType == NativeType.Empty) return NativeSlotState.Neutral;
+        return NativeSlotState.Neutral with {
+            Usable = scratch->IsSlotUsable(scratch->ApparentSlotType, scratch->ApparentActionId) };
     }
 
     private void OnStartDrag(AtkDragDropManager* manager, AtkDragDropInterface* source, short x, short y)
@@ -161,7 +289,7 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         }
         catch (Exception error)
         {
-            DalamudServices.PluginLog.Error(error, "拖放热键栏：接收原生拖放失败，交回游戏处理");
+            DalamudServices.PluginLog.Error(error, "热键栏工坊：接收原生拖放失败，交回游戏处理");
             return false;
         }
     }
@@ -191,13 +319,24 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         if (type == NativeType.InventoryItem)
         {
             if (resolveInventory == null) { LastDrag += " · 背包位置转换不可用"; return false; }
-            uint itemId = 9999;
-            short resolvedType = -1;
-            resolveInventory(&itemId, &resolvedType, payload->Int1, payload->Int2);
-            if (!NativeHotbarInventory.TryNormalizeResult(itemId, resolvedType, out var normalizedType, out var normalizedId))
-            { LastDrag += $" · 物品位置转换失败（{itemId}/{resolvedType}）"; return false; }
-            LastDrag += $" · 物品 {normalizedId} / 类型 {normalizedType}";
-            return Describe((NativeType)normalizedType, normalizedId, out entry);
+            uint container = uint.MaxValue;
+            short slot = -1;
+            resolveInventory(&container, &slot, payload->Int1, payload->Int2);
+            if (!NativeHotbarInventory.TryPackPosition(container, slot, out var packed)
+                || !Enum.IsDefined((InventoryType)container)) return false;
+            var inventory = InventoryManager.Instance();
+            if (inventory == null) return false;
+            var bag = inventory->GetInventoryContainer((InventoryType)container);
+            if (bag == null || !bag->IsLoaded || slot >= bag->Size) return false;
+            var item = bag->GetInventorySlot(slot);
+            if (item == null || item->GetBaseItemId() == 0) return false;
+            var expected = item->GetItemId();
+            LastDrag += $" · 容器 {container} / 格 {slot} / 物品 {expected}";
+            // Set(InventoryItem, packed position) is the SAME normalization used by the native receiver.
+            if (!Describe(NativeType.InventoryItem, packed, out entry)
+                || !NativeHotbarInventory.MatchesItem(expected, entry.NativeType, entry.NativeId))
+            { entry = new(); LastDrag += " · 物品身份核对失败，未接收"; return false; }
+            return true;
         }
         if (type is NativeType.KeyItem or NativeType.Crystal)
         {
@@ -253,10 +392,16 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         scratch->Set(type, id);
         if (!NativeHotbarInventory.IsNormalized((byte)type, id, (byte)scratch->CommandType, scratch->CommandId))
         { LastDrag += " · 原生动作解析失败"; return false; }
+        PrepareCurrentAppearance();
         scratch->LoadIconId();
-        var name = scratch->GetDisplayNameForSlot(scratch->ApparentSlotType, scratch->ApparentActionId).ToString();
-        if (scratch->IconId == 0 || string.IsNullOrWhiteSpace(name)) { LastDrag += " · 无可用名称或图标"; return false; }
-        entry = new() { NativeType = (byte)scratch->CommandType, NativeId = scratch->CommandId, IconId = scratch->IconId,
+        // Native display names are SeStrings (links, colours and icons), not plain UTF-8.
+        // Item rows supply the exact name without link/HQ decoration; keep identity unchanged.
+        var name = scratch->CommandType == NativeType.Item ? NativeHotbarNames.ItemName(scratch->CommandId) : null;
+        if (string.IsNullOrWhiteSpace(name))
+            name = scratch->GetDisplayNameForSlot(scratch->ApparentSlotType, scratch->ApparentActionId).ExtractText();
+        if (string.IsNullOrWhiteSpace(name)) name = $"原生类型 {(byte)scratch->CommandType} / {scratch->CommandId}";
+        var icon = ResolveCurrentIcon(scratch->IconId);
+        entry = new() { NativeType = (byte)scratch->CommandType, NativeId = scratch->CommandId, IconId = icon > 0 ? icon : 234001,
             Name = name, Tooltip = name, Mode = HotbarEntryMode.Native };
         return true;
     }
@@ -270,18 +415,115 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         executeSlot(module, scratch);
     }
 
+    public void ExecuteMacro(SuperMacro saved)
+    {
+        var shell = RaptureShellModule.Instance();
+        if (shell == null) return;
+        if (!macroCopies.TryGetValue(saved, out var address))
+        {
+            var copy = (RaptureMacroModule.Macro*)NativeMemory.AllocZeroed((nuint)sizeof(RaptureMacroModule.Macro));
+            copy->Name.Ctor();
+            for (var i = 0; i < 15; i++) copy->Lines[i].Ctor();
+            macroCopies.Add(saved, (nint)copy);
+            copy->Name.SetString(saved.Name); copy->IconId = saved.Icon; copy->MacroIconRowId = saved.IconRow;
+            for (var i = 0; i < 15; i++) copy->Lines[i].SetString(saved.Lines[i]);
+            address = (nint)copy;
+        }
+        // Use the game's macro interpreter, including waits/locking; never overwrite a real macro to execute a backup.
+        shell->ExecuteMacro((RaptureMacroModule.Macro*)address);
+    }
+
+    private void PrepareAppearance(HotbarEntry entry)
+    {
+        scratch->Clear(); scratch->Set((NativeType)entry.NativeType, entry.NativeId);
+        PrepareCurrentAppearance();
+    }
+
+    internal bool TryDetail(HotbarEntry entry, out NativeHotbarDetail detail)
+    {
+        detail = default;
+        if (!Ready || scratch == null || UIModule.Instance() == null
+            || !entry.HasNative || !NativeHotbarDetail.TryCreate(entry.NativeType, entry.NativeId, out _)) return false;
+        PrepareAppearance(entry);
+        var type = (byte)scratch->ApparentSlotType;
+        var id = scratch->ApparentActionId;
+        if (!NativeHotbarDetail.TryCreate(type, id, out detail)) return false;
+        // DetailKind is a separate namespace from HotbarSlotType/ActionType. Validate the
+        // corresponding row before entering native detail generators, especially Item/HQ IDs.
+        var data = DalamudServices.DataManager;
+        return type switch
+        {
+            1 => data.GetExcelSheet<Lumina.Excel.Sheets.Action>().GetRowOrDefault(id) is not null,
+            2 => NativeHotbarItems.TryItem(id, out var baseId, out _)
+                && data.GetExcelSheet<Lumina.Excel.Sheets.Item>().GetRowOrDefault(baseId) is not null,
+            4 => data.GetExcelSheet<Lumina.Excel.Sheets.EventItem>().GetRowOrDefault(id) is not null,
+            9 => data.GetExcelSheet<Lumina.Excel.Sheets.CraftAction>().GetRowOrDefault(id) is not null,
+            10 => data.GetExcelSheet<Lumina.Excel.Sheets.GeneralAction>().GetRowOrDefault(id) is not null,
+            13 => data.GetExcelSheet<Lumina.Excel.Sheets.Companion>().GetRowOrDefault(id) is not null,
+            17 => data.GetExcelSheet<Lumina.Excel.Sheets.Mount>().GetRowOrDefault(id) is not null,
+            _ => false,
+        };
+    }
+
+    internal bool TryMacroDetail(string text, out NativeHotbarDetail detail)
+    {
+        detail = default;
+        return macroDetails.TryResolve(text, out var target)
+            && TryDetail(new() { NativeType = target.Type, NativeId = target.Id }, out detail);
+    }
+
+    internal static bool TryReadMacro(uint id, out string text, out string name)
+    {
+        text = name = "";
+        if (!NativeHotbarMacroDetailRules.TryMacroAddress(id, out var set, out var index)) return false;
+        var module = RaptureMacroModule.Instance();
+        if (module == null) return false;
+        var macro = module->GetMacro(set, index);
+        if (macro == null) return false;
+        var lines = new string[15];
+        for (var i = 0; i < lines.Length; i++) lines[i] = macro->Lines[i].ToString();
+        text = string.Join('\n', lines);
+        name = NativeHotbarNames.Plain(macro->Name.ToString());
+        return true;
+    }
+
+    private void PrepareCurrentAppearance()
+    {
+        var module = RaptureHotbarModule.Instance();
+        if (module == null) return;
+        var type = scratch->CommandType; var id = scratch->CommandId; ushort parameter = 0;
+        RaptureHotbarModule.GetSlotAppearance(&type, &id, &parameter, module, scratch);
+        scratch->ApparentSlotType = type; scratch->ApparentActionId = id; scratch->ApparentActionModeParam = parameter;
+    }
+
     public uint CurrentIcon(HotbarEntry entry)
     {
         if (!entry.HasNative || scratch == null || UIModule.Instance() == null) return entry.IconId;
-        scratch->Set((NativeType)entry.NativeType, entry.NativeId);
+        PrepareAppearance(entry);
         scratch->LoadIconId();
-        return scratch->IconId > 0 ? scratch->IconId : entry.IconId;
+        var icon = ResolveCurrentIcon(scratch->IconId);
+        return icon > 0 ? icon : entry.IconId;
+    }
+
+    private uint ResolveCurrentIcon(uint icon)
+    {
+        if (scratch->CommandType != NativeType.Item || !NativeHotbarItems.TryItem(scratch->CommandId, out var baseId, out _)) return icon;
+        var row = DalamudServices.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Item>().GetRowOrDefault(baseId);
+        return row is { } item ? NativeHotbarItems.SelectIcon(scratch->CommandId, icon, item.Icon) : icon;
     }
 
     public void Dispose()
     {
+        SuppressStandardExecution = null;
         Ready = false;
         drag.End();
+        foreach (var address in macroCopies.Values)
+        {
+            var macro = (RaptureMacroModule.Macro*)address;
+            macro->Name.Dtor(); for (var i = 0; i < 15; i++) macro->Lines[i].Dtor();
+            NativeMemory.Free(macro);
+        }
+        macroCopies.Clear();
         if (scratch == null) return;
         try { if (initialized) scratch->PopUpHelp.Dtor(); }
         finally { NativeMemory.Free(scratch); scratch = null; initialized = false; }
@@ -306,3 +548,4 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         return pid == Environment.ProcessId && ClientToScreen(window, ref point);
     }
 }
+

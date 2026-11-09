@@ -1,0 +1,1170 @@
+[
+  {
+    "InputId": 45,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 46,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 47,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 48,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 49,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 50,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 51,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 52,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 53,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 54,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 55,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 56,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 57,
+    "Primary": 49,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3102000000000000000000"
+  },
+  {
+    "InputId": 58,
+    "Primary": 50,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3202000000000000000000"
+  },
+  {
+    "InputId": 59,
+    "Primary": 51,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3302000000000000000000"
+  },
+  {
+    "InputId": 60,
+    "Primary": 52,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3402000000000000000000"
+  },
+  {
+    "InputId": 61,
+    "Primary": 53,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3502000000000000000000"
+  },
+  {
+    "InputId": 62,
+    "Primary": 54,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3602000000000000000000"
+  },
+  {
+    "InputId": 63,
+    "Primary": 49,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3100000000000000000000"
+  },
+  {
+    "InputId": 64,
+    "Primary": 50,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3200000000000000000000"
+  },
+  {
+    "InputId": 65,
+    "Primary": 51,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3300000000000000000000"
+  },
+  {
+    "InputId": 66,
+    "Primary": 52,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3400000000000000000000"
+  },
+  {
+    "InputId": 67,
+    "Primary": 53,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3500000000000000000000"
+  },
+  {
+    "InputId": 68,
+    "Primary": 54,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3600000000000000000000"
+  },
+  {
+    "InputId": 69,
+    "Primary": 49,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3104000000000000000000"
+  },
+  {
+    "InputId": 70,
+    "Primary": 50,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3204000000000000000000"
+  },
+  {
+    "InputId": 71,
+    "Primary": 51,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3304000000000000000000"
+  },
+  {
+    "InputId": 72,
+    "Primary": 52,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3404000000000000000000"
+  },
+  {
+    "InputId": 73,
+    "Primary": 53,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3504000000000000000000"
+  },
+  {
+    "InputId": 74,
+    "Primary": 54,
+    "PrimaryModifiers": 4,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3604000000000000000000"
+  },
+  {
+    "InputId": 75,
+    "Primary": 49,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3101000000000000000000"
+  },
+  {
+    "InputId": 76,
+    "Primary": 50,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3201000000000000000000"
+  },
+  {
+    "InputId": 77,
+    "Primary": 51,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3301000000000000000000"
+  },
+  {
+    "InputId": 78,
+    "Primary": 52,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3401000000000000000000"
+  },
+  {
+    "InputId": 79,
+    "Primary": 53,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3501000000000000000000"
+  },
+  {
+    "InputId": 80,
+    "Primary": 54,
+    "PrimaryModifiers": 1,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "3601000000000000000000"
+  },
+  {
+    "InputId": 81,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 82,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 83,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 84,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 85,
+    "Primary": 136,
+    "PrimaryModifiers": 2,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "8802000000000000000000"
+  },
+  {
+    "InputId": 86,
+    "Primary": 86,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "5600000000000000000000"
+  },
+  {
+    "InputId": 87,
+    "Primary": 164,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "a400000000000000000000"
+  },
+  {
+    "InputId": 88,
+    "Primary": 163,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "a300000000000000000000"
+  },
+  {
+    "InputId": 89,
+    "Primary": 136,
+    "PrimaryModifiers": 0,
+    "Secondary": 141,
+    "SecondaryModifiers": 0,
+    "RawHex": "88008d0000000000000000"
+  },
+  {
+    "InputId": 90,
+    "Primary": 81,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "5100000000000000000000"
+  },
+  {
+    "InputId": 91,
+    "Primary": 69,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "4500000000000000000000"
+  },
+  {
+    "InputId": 92,
+    "Primary": 70,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "4600000000000000000000"
+  },
+  {
+    "InputId": 93,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 94,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 95,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 96,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 97,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 98,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 99,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 100,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 101,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 102,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 103,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 104,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 105,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 106,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 107,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 108,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 109,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 110,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 111,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 112,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 113,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 114,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 115,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 116,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 117,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 118,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 119,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 120,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 121,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 122,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 123,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 124,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 125,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 126,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 127,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 128,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 129,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 130,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 131,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 132,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 133,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 134,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 135,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 136,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 137,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 138,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 139,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 140,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 141,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 142,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 143,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 144,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 145,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 146,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 147,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 148,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 149,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 150,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 151,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 152,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 153,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 154,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 155,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 156,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 157,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 158,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 159,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 160,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 161,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 162,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 163,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 164,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 165,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 166,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 167,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 168,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 169,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 170,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 171,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 172,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 173,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 174,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 175,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 176,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 177,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 178,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 179,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 180,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 181,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 182,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 183,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 184,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 185,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 186,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 187,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 188,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 189,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  },
+  {
+    "InputId": 190,
+    "Primary": 0,
+    "PrimaryModifiers": 0,
+    "Secondary": 0,
+    "SecondaryModifiers": 0,
+    "RawHex": "0000000000000000000000"
+  }
+]

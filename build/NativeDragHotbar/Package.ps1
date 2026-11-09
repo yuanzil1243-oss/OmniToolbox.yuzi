@@ -9,7 +9,7 @@ $project = Join-Path $PSScriptRoot 'NativeDragHotbar.csproj'
 [xml]$projectXml = Get-Content -LiteralPath $project -Raw
 $version = [string]$projectXml.Project.PropertyGroup.Version
 $name = [string]$projectXml.Project.PropertyGroup.AssemblyName
-$label = "拖放热键栏_${name}_${version}"
+$label = "热键栏工坊_${name}_${version}"
 $dllName = "$label.dll"
 $readmeName = "${label}_使用说明.txt"
 $zipName = "${label}_本地安装包.zip"
@@ -51,8 +51,8 @@ $manifest = [ordered]@{
         InternalName = $name; Author = 'Yuzi'; RepositoryURL = 'https://github.com/yuanzil1243-oss/OmniToolbox.yuzi'; Version = $version; ApiVersion = 1
         MinimumOmniVersion = '1.1.8.9'; File = $dllName; Sha256 = $hash
         Localization = @{ Source = @{
-            Title = '拖放热键栏'
-            Description = '支持接收游戏原生技能与功能按钮，右键编辑图标、说明及自定义指令，支持自由布局和导入导出。'
+            Title = '热键栏工坊'
+            Description = '接替游戏原生热键栏，支持自由布局、独立快捷键、职业切换与扩展栏，提供连点、备份和还原。'
         }}
     })
 }

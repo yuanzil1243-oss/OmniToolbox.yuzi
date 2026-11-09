@@ -20,8 +20,22 @@ const ulong owner = 0x1122334455667788;
 var path = Path.Combine(temp, "profile.json");
 try
 {
+    FeatureChecks.Run(root, temp, Check, Reject);
+    SettingsBehaviorChecks.Run(Check);
     SharedProfilesChecks.Run(temp, Check, Reject);
+    ClipboardBackupChecks.Run(temp, Check, Reject);
+    SuperHotbarChecks.Run(temp, Check, Reject);
+    CrashRegressionChecks.Run(Check, Reject);
     ExecutionCompatibilityChecks.Run(Check, Reject);
+    NativeLayoutChecks.Run(Check, Reject);
+    MappingAndRepeatChecks.Run(root, Check, Reject);
+    KeyboardAndVisualChecks.Run(root, Check, Reject);
+    ItemAndFontChecks.Run(root, Check, Reject);
+    NativeTooltipChecks.Run(Check);
+    MacroDetailChecks.Run(Check);
+    RestorePreviewChecks.Run(Check);
+    NativeReadChecks.Run(root, temp, Check, Reject);
+    GeometryAndChargeChecks.Run(root, Check, Reject);
     var profile = HotbarProfileStore.Load(path, owner, out var recovered);
     Check(!recovered && profile.Owner == owner.ToString("X16") && profile.Bars.Single().Slots.Count == 12, "new character gets twelve empty slots");
     profile.Bars.Add(new() { Name = "第二栏 面板" });
@@ -210,15 +224,19 @@ try
     var shareText = HotbarTransfer.Export(layoutProfile, 0, true, "1.1.0");
     var shared = HotbarTransfer.Parse(shareText);
     Check(!shareText.Contains("\"Owner\"") && shared.Bars.Count == 1
-        && !shared.ShowAllBars.HasValue && !shared.ShowHelp.HasValue,
+        && !shared.ShowAllBars.HasValue && !shared.ShowCommandMessages.HasValue && !shared.ShowHelp.HasValue,
         "single-bar export contains no character ownership or global toggle settings");
     Check(shared.Bars[0].Columns == 2 && shared.Bars[0].Rows == 2 && shared.Bars[0].Slots.Count == 24
         && shared.Bars[0].Slots[23].Command == "/echo 隐藏格" && shared.Bars[0].AnchorX == 0.75f,
         "bar export round-trips its active layout, hidden contents and position anchors");
     layoutProfile.Show = false;
     var allShared = HotbarTransfer.Parse(HotbarTransfer.Export(layoutProfile, null, false, "1.1.0"));
-    Check(allShared.ShowAllBars == false && allShared.ShowHelp == false,
-        "all-settings export includes the global visibility and operation-help preferences");
+    Check(allShared.ShowAllBars == false && allShared.ShowCommandMessages == false && !allShared.ShowHelp.HasValue,
+        "all-settings export includes visibility and command-feedback preferences without the removed help toggle");
+    var legacyShared = HotbarTransfer.Parse(HotbarTransfer.Export(layoutProfile, null, false, "2.2.5")
+        .Replace("ShowCommandMessages", "ShowHelp"));
+    Check(legacyShared.ShowHelp == false && legacyShared.ShowCommandMessages is null,
+        "legacy extension backup parses without applying old help setting to command feedback");
     var destinationProfile = new HotbarProfile { Owner = (owner + 1).ToString("X16") };
     destinationProfile.Bars[0].Name = "可变栏";
     var firstImported = HotbarTransfer.Append(destinationProfile, owner + 1, shared);
@@ -374,16 +392,15 @@ try
     Reject(() => NativeHotbarInventory.Resolve(inventoryReceiver, 0x141582AB1), "changed inventory call opcode fails closed");
     inventoryReceiver[19] = 0xE8; inventoryReceiver[33] ^= 1;
     Reject(() => NativeHotbarInventory.Resolve(inventoryReceiver, 0x141582AB1), "changed inventory packing instruction fails closed");
-    Check(NativeHotbarInventory.TryNormalizeResult(4551, 2, out var normalizedType, out var normalizedId)
-        && normalizedType == 2 && normalizedId == 4551, "native converter output becomes a stable NQ item identity");
-    Check(NativeHotbarInventory.TryNormalizeResult(1004551, 2, out normalizedType, out normalizedId)
-        && normalizedType == 2 && normalizedId == 1004551, "native converter preserves HQ identity independently of bag position");
-    Check(NativeHotbarInventory.TryNormalizeResult(2000001, 4, out normalizedType, out normalizedId)
-        && normalizedType == 4 && normalizedId == 2000001, "native converter output retains resolved key-item identity");
-    Check(!NativeHotbarInventory.TryNormalizeResult(9999, 2, out _, out _)
-        && !NativeHotbarInventory.TryNormalizeResult(0, 2, out _, out _)
-        && !NativeHotbarInventory.TryNormalizeResult(4551, -1, out _, out _)
-        && !NativeHotbarInventory.TryNormalizeResult(10000001, 2, out _, out _), "failed, sentinel and invalid converter output is rejected");
+    Check(NativeHotbarInventory.TryPackPosition(0, 2, out var packedPosition) && packedPosition == 2,
+        "native inventory converter outputs container and slot, not item ID and type");
+    Check(NativeHotbarInventory.TryPackPosition(1, 34, out packedPosition) && packedPosition == 0x10022,
+        "sorted inventory location packs exactly as the native action-bar receiver");
+    Check(!NativeHotbarInventory.TryPackPosition(99999, 2, out _) && !NativeHotbarInventory.TryPackPosition(0, -1, out _),
+        "invalid container and negative slot fail closed");
+    Check(NativeHotbarInventory.MatchesItem(4551, 2, 4551) && NativeHotbarInventory.MatchesItem(1004551, 2, 1004551)
+        && !NativeHotbarInventory.MatchesItem(1004551, 2, 4551) && !NativeHotbarInventory.MatchesItem(4551, 1, 4551)
+        && !NativeHotbarInventory.MatchesItem(4551, 2, 34), "normalized inventory identity must equal the actual NQ/HQ item in that slot");
     Check(NativeHotbarInventory.IsNormalized(6, 1, 6, 1) && NativeHotbarInventory.IsNormalized(12, 3, 12, 3)
         && NativeHotbarInventory.IsNormalized(7, 0x100, 7, 0x100) && NativeHotbarInventory.IsNormalized(15, 0, 15, 0),
         "emote, main-command, shared macro and gearset identities retain their established handling");
@@ -455,15 +472,43 @@ try
         .GetMethod("ValidateType", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [type]);
     Check(true, $"compiled module passes actual Omni {Path.GetFileName(omni)} API 1 contract validator");
     var module = Activator.CreateInstance(type)!;
+    var structs = context.LoadFromAssemblyPath(Path.Combine(dalamud, "FFXIVClientStructs.dll"));
+    var actionBar = structs.GetType("FFXIVClientStructs.FFXIV.Client.UI.AddonActionBarX", true)!;
+    MappingAndRepeatChecks.CheckNativeInputs(structs, Check);
+    Check(System.Runtime.InteropServices.Marshal.OffsetOf(actionBar, "ActionBarLayout").ToInt64() == 0x288,
+        "current client structs expose the native layout field at the read-only verified 0x288 offset");
+    var nativeLayout = actionBar.GetField("ActionBarLayout")!.FieldType;
+    var layoutNames = new[] { "Layout12X1", "Layout6X2", "Layout4X3", "Layout3X4", "Layout2X6", "Layout1X12" };
+    Check(layoutNames.Select((name, code) => Convert.ToInt32(Enum.Parse(nativeLayout, name)) == code).All(valid => valid),
+        "all six layout codes match the actual runtime FFXIVClientStructs enum");
     var info = type.GetProperty("Info")!.GetValue(module)!;
     var localization = type.GetProperty("Localization")!.GetValue(module)!;
     Check(info is not null && localization is not null, "compiled module instantiates and constructs localization without game services");
+    NativeReadChecks.CheckCompiled(root, assembly, structs, info!, Check);
+    SettingsBehaviorChecks.Compiled(root, assembly, Check);
+    ItemAndFontChecks.Compiled(assembly, Check);
+    NativeTooltipChecks.Compiled(assembly, Check);
+    MacroDetailChecks.Compiled(assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(1, 1, 4, 0)
-        && version.FileVersion == "1.1.4.0" && version.ProductVersion == "1.1.4"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "1.1.4", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 3, 0, 0)
+        && version.FileVersion == "2.3.0.0" && version.ProductVersion == "2.3.0"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.3.0", "module, assembly identity, assembly version and file version agree");
     Check((string)info!.GetType().GetProperty("Author")!.GetValue(info)! == "Yuzi", "compiled module author is Yuzi");
+    if (Environment.GetEnvironmentVariable("NATIVE_DRAG_HOTBAR_CHECK_REPEATER") == "1")
+    {
+        var repeatDll = Path.Combine(root, "build/KeyRepeater/bin/Release/net10.0-windows7.0/KeyRepeater.dll");
+        var repeatAssembly = context.LoadFromAssemblyPath(repeatDll);
+        var repeatType = repeatAssembly.GetType("OmniToolbox.KeyRepeaterOnline.KeyRepeater", true)!;
+        host.GetType("OmniToolbox.Common.Module.Runtime.ModuleContract", true)!
+            .GetMethod("ValidateType", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [repeatType]);
+        Check(Activator.CreateInstance(repeatType) is not null, "compiled repeater passes actual Omni contract and instantiates without game services");
+        var repeatVersion = FileVersionInfo.GetVersionInfo(repeatDll);
+        Check(repeatAssembly.GetName().Name == "KeyRepeater" && repeatAssembly.GetName().Version == new Version(0, 2, 5, 0)
+            && repeatVersion.FileVersion == "0.2.5.0" && repeatVersion.ProductVersion == "0.2.5"
+            && (string)repeatType.GetField("Version")!.GetRawConstantValue()! == "0.2.5", "repeater actual assembly, file and module versions agree");
+    }
     context.Unload();
     Console.WriteLine($"{checks} checks passed. Native game interaction still requires in-game testing.");
 }
 finally { Directory.Delete(temp, true); }
+

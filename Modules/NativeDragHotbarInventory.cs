@@ -18,15 +18,15 @@ internal static class NativeHotbarInventory
         return checked(address + 24 + BinaryPrimitives.ReadInt32LittleEndian(callsite.Slice(20,4)));
     }
 
-    public static bool TryNormalizeResult(uint itemId, short type, out byte normalizedType, out uint normalizedId)
+    public static bool TryPackPosition(uint container, short slot, out uint packed)
     {
-        normalizedType = 0;
-        normalizedId = 0;
-        if (itemId == 0 || itemId == 9999 || type < 0) return false;
-        normalizedType = (byte)type;
-        normalizedId = itemId;
-        return HotbarRules.IsSupportedType(normalizedType) && HotbarRules.IsValidId(normalizedType, normalizedId);
+        packed = 0;
+        if (container > ushort.MaxValue || slot < 0) return false;
+        packed = container << 16 | (ushort)slot; return true;
     }
+
+    public static bool MatchesItem(uint expected, byte actualType, uint actualId) => expected != 0
+        && actualType == 2 && expected == actualId && HotbarRules.IsValidId(2, actualId);
 
     public static bool IsTransient(byte type) => type is 3 or 5 or 14;
 

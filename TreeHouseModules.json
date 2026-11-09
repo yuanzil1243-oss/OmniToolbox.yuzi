@@ -85,15 +85,15 @@
       "InternalName": "NativeDragHotbar",
       "Author": "Yuzi",
       "RepositoryURL": "https://github.com/yuanzil1243-oss/OmniToolbox.yuzi",
-      "Version": "1.1.4",
+      "Version": "2.3.0",
       "ApiVersion": 1,
       "MinimumOmniVersion": "1.1.8.9",
       "File": "Modules/NativeDragHotbar.dll",
-      "Sha256": "3E71A109BC906953A9820AC3BAD24C7C2AB38C94593C3A807C5E7D25D08B665A",
+      "Sha256": "9AEE5EA289596D1DD943FA03DDE5760773FFEDF62BF232EE3D4E1A8F6471A6FA",
       "Localization": {
         "Source": {
-          "Description": "支持接收游戏原生技能与功能按钮，右键编辑图标、说明及自定义指令，支持自由布局和导入导出。",
-          "Title": "拖放热键栏"
+          "Description": "接替游戏原生热键栏，支持自由布局、独立快捷键、职业切换与扩展栏，提供连点、备份和还原。",
+          "Title": "热键栏工坊"
         }
       }
     }

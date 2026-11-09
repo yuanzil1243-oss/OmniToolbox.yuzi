@@ -6,9 +6,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\Modules\NativeDragHotbarClipboardBackup.cs" Link="NativeDragHotbarClipboardBackup.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarFeatures.cs" Link="NativeDragHotbarFeatures.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarGeometry.cs" Link="NativeDragHotbarGeometry.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarVisualRules.cs" Link="NativeDragHotbarVisualRules.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarItems.cs" Link="NativeDragHotbarItems.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarTooltipRules.cs" Link="NativeDragHotbarTooltipRules.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarMacroDetailRules.cs" Link="NativeDragHotbarMacroDetailRules.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarRestorePreview.cs" Link="NativeDragHotbarRestorePreview.cs" />
+    <Compile Include="..\..\Modules\SuperHotbarKeyMap.cs" Link="SuperHotbarKeyMap.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarIdentity.cs" Link="NativeDragHotbarIdentity.cs" />
+    <Compile Include="..\..\Modules\SuperHotbarRepeatProtocol.cs" Link="SuperHotbarRepeatProtocol.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarSuperData.cs" Link="NativeDragHotbarSuperData.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarData.cs" Link="NativeDragHotbarData.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarShared.cs" Link="NativeDragHotbarShared.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarExecution.cs" Link="NativeDragHotbarExecution.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarSafety.cs" Link="NativeDragHotbarSafety.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarDrag.cs" Link="NativeDragHotbarDrag.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarInventory.cs" Link="NativeDragHotbarInventory.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarTransfer.cs" Link="NativeDragHotbarTransfer.cs" />

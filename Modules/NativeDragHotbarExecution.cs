@@ -29,11 +29,11 @@ internal static class NativeHotbarExecution
 
     internal static void ValidateSlotExecutor(ReadOnlySpan<byte> code)
     {
-        // CN 2026.10.06: prologue, followed by CommandType read from HotbarSlot* in RDX.
+        // CN 2026.10.06: prologue, then CommandType read from HotbarSlot* in RDX.
         ReadOnlySpan<byte> expected = [0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x20,
             0x56,0x57,0x41,0x56,0x48,0x83,0xEC,0x40,0x0F,0xB6,0x82,0xC7,0,0,0];
         if (code.Length < expected.Length || !code[..expected.Length].SequenceEqual(expected))
-            throw new InvalidDataException("原生热键格执行函数布局不匹配。");
+            throw new InvalidDataException("原生热键格执行函数布局不匹配，未安装接管 Hook。");
     }
 
     internal static long SnapshotAddress(long address, long moduleBase, long searchBase,

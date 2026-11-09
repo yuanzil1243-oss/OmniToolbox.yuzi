@@ -7,10 +7,10 @@
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AssemblyName>NativeDragHotbar</AssemblyName>
-    <Version>1.1.4</Version>
-    <AssemblyVersion>1.1.4.0</AssemblyVersion>
-    <FileVersion>1.1.4.0</FileVersion>
-    <InformationalVersion>1.1.4</InformationalVersion>
+    <Version>2.3.0</Version>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <FileVersion>2.3.0.0</FileVersion>
+    <InformationalVersion>2.3.0</InformationalVersion>
     <Authors>Yuzi</Authors>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>none</DebugType>
@@ -21,6 +21,7 @@
   <ItemGroup>
     <Compile Include="..\..\Modules\NativeDragHotbar*.cs" />
     <Compile Include="..\..\Modules\NativeHotbarLayout.cs" />
+    <Compile Include="..\..\Modules\SuperHotbarRepeatProtocol.cs" /><Compile Include="..\..\Modules\SuperHotbarKeyMap.cs" /><Compile Include="..\..\Modules\SuperHotbarKeyMapRuntime.cs" />
     <Reference Include="OmniToolbox.Common"><HintPath>$(OmniDir)\OmniToolbox.Common.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="TreeTools"><HintPath>$(OmniDir)\TreeTools.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="OmenTools"><HintPath>$(OmniDir)\OmenTools.dll</HintPath><Private>false</Private></Reference>

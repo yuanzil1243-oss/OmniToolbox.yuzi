@@ -19,16 +19,20 @@ internal sealed class HotbarEntry
     public string Name { get; set; } = "";
     public string Tooltip { get; set; } = "";
     public string Command { get; set; } = "";
+    // Unrecognized native types remain lossless backups, but are never executed as guessed actions.
+    public byte PreservedNativeType { get; set; }
+    public uint PreservedNativeId { get; set; }
     [JsonIgnore] public bool HasNative => HotbarRules.IsSupportedType(NativeType) && HotbarRules.IsValidId(NativeType, NativeId);
-    [JsonIgnore] public bool IsEmpty => !HasNative && string.IsNullOrWhiteSpace(Command) && IconId == 0;
+    [JsonIgnore] public bool IsEmpty => !HasNative && PreservedNativeType == 0 && string.IsNullOrWhiteSpace(Command) && IconId == 0;
     public HotbarEntry Copy() => new() { Mode = Mode, NativeType = NativeType, NativeId = NativeId,
-        IconId = IconId, IconOverride = IconOverride, Name = Name, Tooltip = Tooltip, Command = Command };
+        IconId = IconId, IconOverride = IconOverride, Name = Name, Tooltip = Tooltip, Command = Command,
+        PreservedNativeType = PreservedNativeType, PreservedNativeId = PreservedNativeId };
 }
 
 internal sealed class DragHotbar
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "拖放热键栏";
+    public string Name { get; set; } = "扩展栏";
     public bool Visible { get; set; } = true;
     public bool HideEmpty { get; set; }
     public int Columns { get; set; } = 12;
@@ -40,6 +44,8 @@ internal sealed class DragHotbar
     public float Y { get; set; } = 300;
     public float? AnchorX { get; set; }
     public float? AnchorY { get; set; }
+    // Only used for takeover bars. Extra bars keep their existing independent layout.
+    public bool FollowNativeHud { get; set; } = true;
     public List<HotbarEntry> Slots { get; set; } = Enumerable.Range(0, 12).Select(_ => new HotbarEntry()).ToList();
 }
 
@@ -81,13 +87,14 @@ internal static class HotbarRules
     }
     // Only types understood by this release. Inventory-location types must be normalized before saving.
     public static bool IsSupportedType(byte type) => type is 1 or 2 or 4 or 6 or 7 or 8 or 9 or 10 or 11
-        or 12 or 13 or 15 or 16 or 17 or 18 or 19 or 20;
+        or 12 or 13 or 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22 or 24 or 25 or 26 or 27 or 29 or 30 or 31 or 32 or 33 or 34 or 35;
     public static bool IsValidId(byte type, uint id) => type switch
     {
         7 => (id >> 8) <= 1 && (id & 255) < 100,
         15 => id < 100,
         8 => id <= 17 || id == 255,
         18 => id < 8 || id == 255,
+        >= 21 and <= 35 => id < 10_000_000,
         _ => id > 0 && id < 10_000_000,
     };
 
@@ -174,6 +181,8 @@ internal static class HotbarRules
                 if (slot is null || !Enum.IsDefined(slot.Mode) || slot.Name is null || slot.Name.Length > 256
                     || slot.Tooltip is null || slot.Tooltip.Length > 1024 || slot.Command is null || slot.Command.Length > 2048
                     || slot.IconId > 10_000_000
+                    || (slot.PreservedNativeType == 0 && slot.PreservedNativeId != 0)
+                    || (slot.PreservedNativeType != 0 && (slot.NativeType != 0 || slot.NativeId != 0))
                     || (slot.NativeType != 0 && !slot.HasNative)
                     || (slot.NativeType == 0 && slot.NativeId != 0))
                     throw new InvalidDataException("格子内容无效。");
