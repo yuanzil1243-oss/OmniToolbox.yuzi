@@ -2,3 +2,9 @@
 /build/obj/
 /tests/**/bin/
 /tests/**/obj/
+
+# Local working files and release notes
+/.tmp-*/
+/.tmp-*
+/outputs/
+/docs/
