@@ -60,16 +60,56 @@ internal static class WorkshopVisibilityCommands
         if (!HotbarVisibilityCommands.Apply(candidate, action, selector, out index)) return false;
         var group = WorkshopVisibilityGroup.Capture(candidate.Show, candidate.Bars);
         if (group.Matches(show, bars)) return true;
+        Commit(saved, takeover, extensions, native, group, persist);
+        changed = true;
+        return true;
+    }
+
+    // Settings checkboxes change only their own flag, unlike an "on" command which
+    // may also reveal individual bars. Both paths use the same small durable state.
+    public static bool Set(WorkshopProfile saved, SuperHotbarDocument? takeover, HotbarProfile extensions,
+        bool native, int index, bool visible, Action<WorkshopVisibilityState> persist)
+    {
+        if (native && takeover is null) return false;
+        var bars = native ? takeover!.Appearance : extensions.Bars;
+        if (index < -1 || index >= bars.Count) return false;
+        var show = native ? takeover!.Show : extensions.Show;
+        var group = WorkshopVisibilityGroup.Capture(show, bars);
+        if (index < 0) group.Show = visible; else group.Bars[index].Visible = visible;
+        if (group.Matches(show, bars)) return true;
+        Commit(saved, takeover, extensions, native, group, persist);
+        return true;
+    }
+
+    private static void Commit(WorkshopProfile saved, SuperHotbarDocument? takeover, HotbarProfile extensions,
+        bool native, WorkshopVisibilityGroup group, Action<WorkshopVisibilityState> persist)
+    {
         var state = new WorkshopVisibilityState { ProfileId = saved.Id, Revision = checked(saved.VisibilityRevision + 1),
             Takeover = takeover is null ? null : WorkshopVisibilityGroup.Capture(takeover.Show, takeover.Appearance),
             Extensions = WorkshopVisibilityGroup.Capture(extensions.Show, extensions.Bars) };
         if (native) state.Takeover = group; else state.Extensions = group;
         persist(state);
         // No fallible native operations or full-archive work after the durable commit.
-        for (var i = 0; i < bars.Count; i++) bars[i].Visible = candidate.Bars[i].Visible;
-        if (native) takeover!.Show = candidate.Show; else extensions.Show = candidate.Show;
-        saved.VisibilityRevision = state.Revision; changed = true;
-        return true;
+        var bars = native ? takeover!.Appearance : extensions.Bars;
+        for (var i = 0; i < bars.Count; i++) bars[i].Visible = group.Bars[i].Visible;
+        if (native)
+        {
+            takeover!.Show = group.Show;
+            if (saved.Takeover is { } archive)
+            {
+                archive.Show = group.Show;
+                foreach (var bar in archive.Appearance)
+                    if (group.Bars.Find(b => b.Id == bar.Id) is { } entry) bar.Visible = entry.Visible;
+            }
+        }
+        else
+        {
+            extensions.Show = group.Show;
+            saved.Extensions.Show = group.Show;
+            foreach (var bar in saved.Extensions.Bars)
+                if (group.Bars.Find(b => b.Id == bar.Id) is { } entry) bar.Visible = entry.Visible;
+        }
+        saved.VisibilityRevision = state.Revision;
     }
 }
 

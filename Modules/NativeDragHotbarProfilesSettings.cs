@@ -11,11 +11,12 @@ public sealed partial class NativeDragHotbar
     private string workshopEditName = "", workshopOperationId = "";
     private ulong workshopOperationOwner;
     private WorkshopProfile? workshopImport;
-    private bool workshopReplaceExtensions, workshopMacroConfirm;
+    private bool workshopReplaceExtensions, workshopMacroConfirm, workshopReadOverwrite;
 
     private void ClearWorkshopOperations()
     {
         workshopNameAction = 0; workshopImport = null; workshopMacroConfirm = false;
+        workshopReadOverwrite = false;
         workshopOperationId = ""; workshopOperationOwner = 0;
         workshopReplaceExtensions = importGlobalSettings = false;
         superAppearanceConfirm = false;
@@ -40,7 +41,15 @@ public sealed partial class NativeDragHotbar
         DrawWorkshopProfileToolbar();
         ImGui.Spacing();
         ImGui.TextWrapped("本机登录其他角色时继续使用当前选择。设置自动保存；游戏设置模板仅在确认应用或开启自动应用后写入游戏。");
-        if (ImGui.Button("读取游戏配置…")) BeginSuperNativeRead();
+        if (workshopLibrary.Current.Takeover is null)
+        {
+            if (ImGui.Button("读取游戏配置…")) BeginSuperNativeRead();
+        }
+        else if (ImGui.Button("保存"))
+        {
+            workshopDirty = true; SaveWorkshop(true);
+            superStatus = workshopSaveError.Length == 0 ? "当前配置已保存，自定义指令和布局已保留。" : "保存未完成，请重试：" + workshopSaveError;
+        }
         ImGui.SameLine();
         ImGui.BeginDisabled(super is null);
         if (ImGui.Button("更新用户宏备份…"))
@@ -55,6 +64,12 @@ public sealed partial class NativeDragHotbar
         DrawWorkshopReadPreview();
         DrawWorkshopMacroBackup();
         DrawWorkshopImportPreview();
+        if (workshopLibrary.Current.Takeover is not null && ImGui.TreeNodeEx("重新读取游戏配置"))
+        {
+            ImGui.TextWrapped("仅在需要用游戏内容重建接管档案时使用。会覆盖工坊中编辑的自定义指令、栏位、布局和快捷键；日常修改会自动保存，无需重新读取。");
+            if (ImGui.Button("重新读取游戏配置…")) BeginSuperNativeRead();
+            ImGui.TreePop();
+        }
         ImGui.Separator();
         DrawWorkshopBackupInfo();
         ImGui.Separator();
@@ -67,7 +82,7 @@ public sealed partial class NativeDragHotbar
             if (ImGui.Button("重试保存")) { workshopDirty = true; SaveWorkshop(true); }
         }
         else ImGui.TextDisabled(dirty || superDirty || workshopDirty ? "正在自动保存…"
-            : workshopVisibilityPending ? "显隐状态已保存，正在合并完整配置…" : "已自动保存到本机。");
+            : "已自动保存到本机。显隐状态单独保存。");
     }
 
     private void DrawWorkshopProfileToolbar()
@@ -147,8 +162,14 @@ public sealed partial class NativeDragHotbar
         ImGui.Separator();
         ImGui.TextWrapped($"读取预览：热键栏、{superImport.Bindings.Count} 组快捷键、{superImport.Macros.Count} 份宏。确认后更新当前配置的接管档案，扩展栏保留，不写回游戏。");
         DrawSuperBindingWarnings(superImport);
-        ImGui.BeginDisabled(!WorkshopOperationValid);
-        if (ImGui.Button("确认保存读取结果"))
+        var replacing = workshopLibrary?.Current.Takeover is not null;
+        if (replacing)
+        {
+            ImGui.TextWrapped("重新读取会覆盖接管档案及工坊自定义指令。保存现有修改请取消，再点“保存”。");
+            ImGui.Checkbox("我确认用游戏配置覆盖现有接管档案和自定义指令", ref workshopReadOverwrite);
+        }
+        ImGui.BeginDisabled(!WorkshopOperationValid || replacing && !workshopReadOverwrite);
+        if (ImGui.Button("确认保存读取结果") && WorkshopOperationValid && (!replacing || workshopReadOverwrite))
         {
             var imported = superImport;
             imported.Enabled = false;

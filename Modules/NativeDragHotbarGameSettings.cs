@@ -24,6 +24,7 @@ internal sealed class WorkshopGameTemplate
     public string SourceName { get; set; } = "";
     public string CapturedAt { get; set; } = "";
     public string StructsId { get; set; } = "";
+    public string KeySchema { get; set; } = "";
     public int KeySize { get; set; }
     public int KeyCount { get; set; }
     public int CurrentLayout { get; set; }
@@ -39,6 +40,27 @@ internal sealed record WorkshopGameDifference(string Category, string Name, stri
 
 internal static class WorkshopGameRules
 {
+    // Verified from the actual dependency assemblies, not inferred from byte size.
+    internal const string VerifiedKeySchema = "1D7E818F44469AE5119574860FEAEC0FB2B5ED0637AB6EF8E62373BCE74E951D";
+    private static readonly HashSet<Guid> VerifiedLegacyBuilds = [
+        new("3026f17c-0e2a-49fe-9842-6b41f2b2a2bf"),
+        new("11763456-61fc-4b0e-9e27-7db51fd84797"),
+        new("d5a6c4cf-8f1a-4d66-bbcb-130678162b0b"),
+    ];
+    internal static void CheckKeyCompatibility(WorkshopGameTemplate template, string currentBuild,
+        string currentSchema, int keySize, int keyCount)
+    {
+        Validate(template);
+        if (!template.Scope.Bindings) return;
+        var compatible = template.KeySchema.Length > 0
+            ? template.KeySchema.Equals(currentSchema, StringComparison.OrdinalIgnoreCase)
+            : Guid.Parse(template.StructsId) == Guid.Parse(currentBuild)
+                || VerifiedLegacyBuilds.Contains(Guid.Parse(template.StructsId)) && currentSchema == VerifiedKeySchema;
+        if (!compatible || template.KeySize != keySize || keyCount is < 1 or > 4096
+            || template.Keys.Any(k => k.Id >= keyCount))
+            throw new InvalidDataException("模板中的其他快捷键尚未确认兼容当前客户端，未应用。已保留原配置和自定义指令，请保留配置并反馈此提示。");
+    }
+
     // A native default can intentionally sit outside the ordinary editable range
     // (LockonDefaultZoom: default .61, min .69, max .78). SetValue restores that
     // default for out-of-range input. Equal live values require no native write.
@@ -100,7 +122,8 @@ internal static class WorkshopGameRules
                 CultureInfo.InvariantCulture, out var owner) || owner == 0 || value.SourceName is null || value.SourceName.Length > 128
             || !DateTimeOffset.TryParse(value.CapturedAt, out _) || value.CurrentLayout is < 0 or > 3 || value.Scope is null
             || value.Windows is null || value.Options is null || value.Keys is null || value.Windows.Count > 1500
-            || value.Options.Count > 2048 || value.Keys.Count > 4096 || value.KeySize is < 1 or > 64 || value.KeyCount is < 1 or > 4096)
+            || value.Options.Count > 2048 || value.Keys.Count > 4096 || value.KeySize is < 1 or > 64 || value.KeyCount is < 1 or > 4096
+            || value.KeySchema is null || value.KeySchema.Length != 0 && (value.KeySchema.Length != 64 || !value.KeySchema.All(char.IsAsciiHexDigit)))
             throw new InvalidDataException("游戏设置模板的版本、身份或范围无效。");
         if (!value.Scope.Layout && value.Windows.Count != 0 || !value.Scope.Bindings && value.Keys.Count != 0
             || !value.Scope.Layout && !value.Scope.Character && !value.Scope.Bindings && !value.Scope.System)

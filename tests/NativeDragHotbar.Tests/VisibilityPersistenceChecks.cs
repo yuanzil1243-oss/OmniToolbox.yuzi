@@ -21,6 +21,7 @@ internal static class VisibilityPersistenceChecks
     }
     internal static void Run(string temp, Action<bool, string> check, Action<Action, string> reject)
     {
+        SeparateState(temp, check);
         var directory = Path.Combine(temp, "visibility-record");
         var library = Fresh(); var saved = library.Current;
         WorkshopLibraryStore.Save(directory, library, false);
@@ -137,6 +138,40 @@ internal static class VisibilityPersistenceChecks
         catch (OverflowException) { check(!runtime.Appearance[7].Visible, "revision overflow cannot expose an unpersisted state"); }
     }
 
+    private static void SeparateState(string temp, Action<bool, string> check)
+    {
+        var directory = Path.Combine(temp, "visibility-independent");
+        var library = Fresh(); var saved = library.Current;
+        var runtime = WorkshopProfiles.Bind(saved, A)!;
+        WorkshopLibraryStore.Save(directory, library, false);
+        var path = WorkshopLibraryStore.PathFor(directory); var before = File.ReadAllBytes(path);
+        void Persist(WorkshopVisibilityState state) => WorkshopVisibilityStore.Save(directory, state);
+        WorkshopVisibilityCommands.Set(saved, runtime, saved.Extensions, true, -1, false, Persist);
+        WorkshopVisibilityCommands.Set(saved, runtime, saved.Extensions, true, 7, true, Persist);
+        check(!runtime.Show && runtime.Appearance[7].Visible && !runtime.Appearance[6].Visible,
+            "checkbox per-bar state changes leave global and neighboring visibility untouched");
+        for (var i = 0; i < 20; i++)
+        {
+            WorkshopVisibilityCommands.Set(saved, runtime, saved.Extensions, false, -1, i % 2 == 0, Persist);
+            WorkshopVisibilityCommands.Set(saved, runtime, saved.Extensions, true, 9, i % 2 == 0, Persist);
+        }
+        check(File.ReadAllBytes(path).SequenceEqual(before), "repeated UI visibility updates leave full archive file bytes untouched");
+        var exported = WorkshopProfileTransfer.Decode(WorkshopProfileTransfer.Encode(saved), saved.Extensions, true).Profile!;
+        check(!exported.Takeover!.Show && exported.Takeover.Appearance[7].Visible && !exported.Extensions.Show,
+            "immediate export/copy observes latest small-state changes without needing full save first");
+        var restarted = WorkshopLibraryStore.Load(directory, B, true, out _, out _);
+        WorkshopVisibilityStore.Replay(directory, restarted);
+        check(!restarted.Current.Takeover!.Show && restarted.Current.Takeover.Appearance[7].Visible && !restarted.Current.Extensions.Show,
+            "checkbox states replay on another actor without exit callbacks or archive compaction");
+        var old = Json(library); var live = Json(runtime);
+        try
+        {
+            WorkshopVisibilityCommands.Set(saved, runtime, saved.Extensions, true, 7, false, _ => throw new IOException("disk full"));
+            throw new Exception("Expected state write failure");
+        }
+        catch (IOException) { check(Json(library) == old && Json(runtime) == live, "failed checkbox write changes neither saved nor runtime state"); }
+    }
+
     internal static void Compiled(Assembly assembly, Action<bool, string> check)
     {
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly;
@@ -147,7 +182,12 @@ internal static class VisibilityPersistenceChecks
             "actual visibility command dispatch no longer performs a full-library save per line");
         check(Calls("EnsureWorkshopLibrary").Contains("Replay"), "actual library startup replays durable visibility records before character binding");
         check(Calls("ApplyWorkshopVisibilityCommand").Contains("Apply") && !Calls("ApplyWorkshopVisibilityCommand").Contains("SaveWorkshop"),
-            "actual visibility handler delegates to write-before-apply persistence and schedules compaction");
+            "actual visibility handler delegates to write-before-apply persistence without an archive save");
+        check(type.GetField("workshopVisibilityPending", flags) is null
+            && Calls("SetWorkshopVisibility").Contains("Set") && !Calls("SetWorkshopVisibility").Contains("SaveWorkshop")
+            && Calls("DrawSuperOverviewSettings").Contains("SetWorkshopVisibility")
+            && Calls("DrawSuperAppearanceEditor").Contains("SetWorkshopVisibility"),
+            "visibility state has no delayed compaction flag and takeover checkboxes use the small-state path");
         check(Calls("CommitWorkshopEdit").Contains("SaveWorkshop") && Calls("SaveWorkshop").Contains("Save"),
             "configuration switches retain full save and failure checks before replacing runtime references");
     }

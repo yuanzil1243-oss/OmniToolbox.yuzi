@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.5.0";
+    public const string Version = "2.5.1";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -303,7 +303,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             ImGui.TextWrapped(L("SaveError"));
             if (ImGui.Button(L("Retry"))) Save();
         }
-        if (Check(L("Show"), profile.Show, v => profile.Show = v)) dirty = true;
+        Check(L("Show"), profile.Show, v => SetWorkshopVisibility(false, -1, v));
         if (ImGui.Button(L("Add")) && profile.Bars.Count < HotbarRules.MaxBars)
         { profile.Bars.Add(new() { Name = $"扩展栏 {profile.Bars.Count + 1}", Y = 300 + profile.Bars.Count * 60 }); selected = profile.Bars.Count - 1; sharedSettingsExpanded = true; dirty = true; }
         selected = Math.Clamp(selected, 0, Math.Max(0, profile.Bars.Count - 1));
@@ -348,7 +348,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         ImGui.SameLine();
         ImGui.SetNextItemWidth(260);
         if (ImGui.InputText("##NDHBarName", ref name, 128)) { bar.Name = name; dirty = true; }
-        if (Check(L("Visible"), bar.Visible, v => bar.Visible = v)) dirty = true;
+        Check(L("Visible"), bar.Visible, v => SetWorkshopVisibility(false, profile.Bars.IndexOf(bar), v));
         ImGui.SameLine();
         if (Check(L("HideEmpty"), bar.HideEmpty, v => bar.HideEmpty = v)) dirty = true;
         ImGui.TextWrapped("扩展栏不受游戏热键栏锁和接管锁影响，可拖换格子；按住 Alt + 左键移动整栏。");

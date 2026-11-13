@@ -13,6 +13,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 internal static unsafe class WorkshopGameNative
 {
     private static string StructsId => typeof(AddonConfig).Assembly.ManifestModule.ModuleVersionId.ToString("D");
+    private static readonly Lazy<string> KeySchema = new(() => WorkshopGameKeySchema.Fingerprint(typeof(Keybind), typeof(InputId)));
     internal static void Require(ulong owner)
     {
         if (owner == 0) throw new InvalidOperationException("请先登录角色。");
@@ -101,7 +102,8 @@ internal static unsafe class WorkshopGameNative
         var addon = AddonConfig.Instance(); var input = UIInputData.Instance();
         if (input == null || input->NumKeybinds is < 1 or > 4096) throw new InvalidOperationException("按键配置未就绪。");
         var result = new WorkshopGameTemplate { Source = owner.ToString("X16"), SourceName = DService.Instance().ObjectTable.LocalPlayer?.Name.ToString() ?? "",
-            CapturedAt = DateTimeOffset.UtcNow.ToString("O"), StructsId = StructsId, KeySize = sizeof(Keybind), KeyCount = input->NumKeybinds,
+            CapturedAt = DateTimeOffset.UtcNow.ToString("O"), StructsId = StructsId, KeySchema = scope.Bindings ? KeySchema.Value : "",
+            KeySize = sizeof(Keybind), KeyCount = input->NumKeybinds,
             CurrentLayout = addon->ActiveDataSet->CurrentHudLayout, Scope = scope };
         if (scope.Layout)
         {
@@ -174,8 +176,14 @@ internal static unsafe class WorkshopGameNative
         if (template.LocalHudSnapshot is not null && !template.Source.Equals(owner.ToString("X16"), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("完整应用前 HUD 备份只允许恢复到原来的角色。");
         var input = UIInputData.Instance();
-        if (template.StructsId != StructsId || template.KeySize != sizeof(Keybind) || template.KeyCount != input->NumKeybinds)
-            throw new InvalidOperationException("模板与当前客户端结构不一致，请重新读取游戏设置模板。");
+        if (template.Scope.Bindings)
+        {
+            if (input == null) throw new InvalidOperationException("按键配置未就绪，请稍后重试。");
+            WorkshopGameRules.CheckKeyCompatibility(template, StructsId, KeySchema.Value, sizeof(Keybind), input->NumKeybinds);
+            foreach (var key in template.Keys)
+                if (input->GetKeybind((InputId)key.Id) == null)
+                    throw new InvalidOperationException("当前客户端缺少模板按键：" + key.Id + "。原配置和自定义指令已保留。");
+        }
         if (template.Scope.Layout)
         {
             var names = Names();

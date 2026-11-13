@@ -29,7 +29,7 @@ public sealed partial class NativeDragHotbar
     {
         if (workshopLibrary is null || !ImGui.CollapsingHeader("跨角色游戏设置模板")) return;
         var current = workshopLibrary.Current;
-        ImGui.TextWrapped("保存这套配置的游戏设置，供本机其他角色使用。应用前会备份当前角色的设置。");
+        ImGui.TextWrapped("保存游戏的界面和操作设置，供本机其他角色使用。与上方工坊配置的自动保存分开；更新模板不会改动自定义指令。应用前会备份当前角色设置。");
         if (workshopGameOperation != 0)
         {
             DrawWorkshopGameOperation();

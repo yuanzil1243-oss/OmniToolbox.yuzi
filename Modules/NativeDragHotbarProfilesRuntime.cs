@@ -9,7 +9,6 @@ public sealed partial class NativeDragHotbar
 {
     private WorkshopLibrary? workshopLibrary;
     private bool workshopRecovered, workshopDirty, workshopLoadAttempted;
-    private bool workshopVisibilityPending;
     private string workshopRuntimeId = "", workshopSaveError = "";
     private string WorkshopDirectory => DalamudServices.PluginInterface.GetPluginConfigDirectory();
 
@@ -21,7 +20,7 @@ public sealed partial class NativeDragHotbar
         {
             var library = WorkshopLibraryStore.Load(WorkshopDirectory, owner, config.ShowCommandMessages,
                 out var recovered, out var migrated);
-            workshopVisibilityPending = WorkshopVisibilityStore.Replay(WorkshopDirectory, library);
+            WorkshopVisibilityStore.Replay(WorkshopDirectory, library);
             workshopLibrary = library; workshopRecovered = recovered;
             profile = library.Current.Extensions; config.ShowCommandMessages = library.Current.ShowCommandMessages;
             profileLoaded = true; readOnly = superReadOnly = false; recovering = false;
@@ -64,7 +63,7 @@ public sealed partial class NativeDragHotbar
     private void SaveWorkshop(bool force)
     {
         if (workshopLibrary is null || readOnly || superReadOnly) return;
-        var changed = dirty || superDirty || workshopDirty || workshopRecovered || workshopVisibilityPending
+        var changed = dirty || superDirty || workshopDirty || workshopRecovered
             || config.ShowCommandMessages != workshopLibrary.Current.ShowCommandMessages;
         if (!changed || !force && Environment.TickCount64 < superSaveAt) return;
         try
@@ -79,7 +78,6 @@ public sealed partial class NativeDragHotbar
             }
             WorkshopLibraryStore.Save(WorkshopDirectory, workshopLibrary, workshopRecovered);
             dirty = superDirty = workshopDirty = workshopRecovered = recovering = false;
-            workshopVisibilityPending = false;
             workshopSaveError = saveError = ""; superSaveAt = Environment.TickCount64 + 1000;
         }
         catch (Exception error)
@@ -99,12 +97,6 @@ public sealed partial class NativeDragHotbar
             if (!WorkshopVisibilityCommands.Apply(workshopLibrary.Current, super, profile, takeover, action, selector,
                 state => WorkshopVisibilityStore.Save(WorkshopDirectory, state), out var index, out var changed))
             { PrintCommandMessage(L("InvalidBar", selector)); return true; }
-            if (changed)
-            {
-                workshopVisibilityPending = true;
-                // A burst writes only tiny durable records; merge its latest state once after it settles.
-                superSaveAt = Environment.TickCount64 + 750;
-            }
             var bars = takeover ? super!.Appearance : profile.Bars;
             var show = takeover ? super!.Show : profile.Show;
             PrintCommandMessage(HotbarCommandFeedback.Visibility(takeover, index,
@@ -117,6 +109,22 @@ public sealed partial class NativeDragHotbar
             DalamudServices.PluginLog.Error(error, "热键栏工坊：显隐记录保存失败");
         }
         return true;
+    }
+
+    private void SetWorkshopVisibility(bool takeover, int index, bool visible)
+    {
+        if (workshopLibrary is null || readOnly || superReadOnly) return;
+        try
+        {
+            WorkshopVisibilityCommands.Set(workshopLibrary.Current, super, profile, takeover, index, visible,
+                state => WorkshopVisibilityStore.Save(WorkshopDirectory, state));
+        }
+        catch (Exception error)
+        {
+            superStatus = "显隐状态保存失败，本次显示操作未执行：" + error.Message;
+            Notify(superStatus);
+            DalamudServices.PluginLog.Error(error, "热键栏工坊：显隐记录保存失败");
+        }
     }
 
     private bool CommitWorkshopEdit(Action<WorkshopLibrary> edit)

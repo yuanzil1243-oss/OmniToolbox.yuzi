@@ -129,7 +129,7 @@ public sealed partial class NativeDragHotbar
             }
         }
         var show = super.Show;
-        if (ImGui.Checkbox("显示接管栏", ref show)) { super.Show = show; superDirty = true; }
+        if (ImGui.Checkbox("显示接管栏", ref show)) SetWorkshopVisibility(true, -1, show);
         var hide = super.HideNative;
         if (ImGui.Checkbox("接管时隐藏游戏原有热键栏", ref hide))
         { super.HideNative = hide; superDirty = true; if (!hide) RestoreSuperVisibility(); }
@@ -382,7 +382,7 @@ public sealed partial class NativeDragHotbar
             if (ImGui.Checkbox("隐藏本栏空格", ref hideEmpty)) { bar.HideEmpty = hideEmpty; superDirty = true; }
             ImGui.TextWrapped("隐藏空格不会移动其他格子；拖入内容时会临时显示空格。");
             var visible = bar.Visible;
-            if (ImGui.Checkbox("显示此栏", ref visible)) { bar.Visible = visible; superDirty = true; }
+            if (ImGui.Checkbox("显示此栏", ref visible)) SetWorkshopVisibility(true, superSelectedBar, visible);
             ImGui.TextWrapped("位置、样式和缩放会自动保存到当前配置，换角色或账号后保持一致。Alt + 左键可移动整栏。");
             DrawSuperNativeLayoutPicker(bar);
             if (ImGui.Button("读取本栏游戏样式")) InheritSuperLayouts(superSelectedBar);

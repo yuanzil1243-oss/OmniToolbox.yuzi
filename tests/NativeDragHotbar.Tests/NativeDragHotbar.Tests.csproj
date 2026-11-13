@@ -10,6 +10,7 @@
     <Compile Include="..\..\Modules\NativeDragHotbarUiRules.cs" Link="NativeDragHotbarUiRules.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarVisibility.cs" Link="NativeDragHotbarVisibility.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarGameSettings.cs" Link="NativeDragHotbarGameSettings.cs" />
+    <Compile Include="..\..\Modules\NativeDragHotbarGameSettingsCompatibility.cs" Link="NativeDragHotbarGameSettingsCompatibility.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarProfiles.cs" Link="NativeDragHotbarProfiles.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarClipboardBackup.cs" Link="NativeDragHotbarClipboardBackup.cs" />
     <Compile Include="..\..\Modules\NativeDragHotbarFeatures.cs" Link="NativeDragHotbarFeatures.cs" />
