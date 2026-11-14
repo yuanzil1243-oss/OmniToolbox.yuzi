@@ -107,6 +107,12 @@ public sealed partial class NativeDragHotbar
         // moves: ImGui resolves hover before this callback using the previous frame flags.
         var left = index == 0 ? new Vector2(34 * geometry.Scale, 0) : Vector2.Zero;
         var windowMin = geometry.FirstFrame - left;
+        // Takeover surfaces belong to the game client. Without an explicit viewport,
+        // shrinking the client can promote an off-screen carrier to a new OS window.
+        // Background pixels would still target the main viewport while input migrated.
+        var windowMax = geometry.FirstFrame + geometry.Size;
+        if (!TakeoverViewportRules.Intersects(windowMin, windowMax, view.Pos, view.Size)) return;
+        ImGui.SetNextWindowViewport(view.ID);
         ImGui.SetNextWindowPos(windowMin, ImGuiCond.Always);
         ImGui.SetNextWindowSize(geometry.Size + left, ImGuiCond.Always);
         var flags = ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse

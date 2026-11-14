@@ -151,9 +151,10 @@ internal sealed class NativeHotbarIconVisual
         if (frame) Sprite(list, 3, 0, min, max, white);
         if (NativeIconVisualRules.Cooling(state))
         {
-            // ULD component 1001 node 15/17 uses (2,2),44x46 within a 48x48 icon.
+            // ULD component 1001: charge node 15 at (0,2), recast node 17 at (2,2); both 44x46.
+            var inset = NativeIconVisualRules.ChargeRing(state) ? 0 : 2;
             Sprite(list, NativeIconVisualRules.RecastPartList(state), NativeIconVisualRules.RecastFrame(state),
-                min + new Vector2(2, 2) * scale, min + new Vector2(46, 48) * scale, white);
+                min + new Vector2(inset, 2) * scale, min + new Vector2(inset + 44, 48) * scale, white);
         }
         if (state.Highlighted) Sprite(list, 3, NativeIconVisualRules.AntsFrame(seconds), min, max, white);
         if (!animations.TryGetValue((bar, slot), out var animation)) animations[(bar, slot)] = animation = new();

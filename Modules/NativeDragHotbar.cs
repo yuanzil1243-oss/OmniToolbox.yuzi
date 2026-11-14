@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.5.1";
+    public const string Version = "2.5.3";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -450,6 +450,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             nativeTooltipPassthrough.Clear();
             nativeWindowCovers = NativeHotbarWindowLayers.Read(ImGui.GetMainViewport().Pos,
                 nativeDetails?.OwnsCurrent == true ? nativeTooltipPassthrough : null);
+            if (SuperActive) UpdateTakeoverViewport(ImGui.GetMainViewport().Size);
             ProcessDrops();
             var dragging = bridge?.IsDragging == true;
             var supported = dragging && bridge!.Preview();
@@ -607,7 +608,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         var pos = new Vector2(point.X, point.Y) + cursorOffset;
         if (nativeWindowCovers.Exists(r => r.Contains(pos)) || PluginWindowBlocksDrop()) return null;
         return targets.LastOrDefault(t => t.Bar.Visible && ContainsBar(t.Bar)
-            && (SuperBarIndex(t.Bar) < 0 || super is { Locked: false } && !NativeBarGeometryReader.HudEditing())
+            && (SuperBarIndex(t.Bar) < 0 || !takeoverViewport.Hidden && super is { Locked: false } && !NativeBarGeometryReader.HudEditing())
             && (t.Editing || !editorVisible || pos.X < editorMin.X || pos.X >= editorMax.X || pos.Y < editorMin.Y || pos.Y >= editorMax.Y)
             && pos.X >= t.Min.X && pos.X < t.Max.X && pos.Y >= t.Min.Y && pos.Y < t.Max.Y);
     }
@@ -663,7 +664,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
     }
 
     private bool ValidRequest(DropRequest request) => owner == request.Owner && NativeHotbarUiContext.Visible() && ContainsBar(request.Bar)
-        && (SuperBarIndex(request.Bar) < 0 || super is { Locked: false } && !NativeBarGeometryReader.HudEditing())
+        && (SuperBarIndex(request.Bar) < 0 || !takeoverViewport.Hidden && super is { Locked: false } && !NativeBarGeometryReader.HudEditing())
         && request.Index >= 0 && request.Index < request.Bar.SlotCount
         && (!request.MacroInsertion || (!BarEditingLocked(request.Bar) && draft?.Mode == HotbarEntryMode.Command))
         && (request.Editing

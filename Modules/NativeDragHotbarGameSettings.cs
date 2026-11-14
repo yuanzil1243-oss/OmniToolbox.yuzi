@@ -75,6 +75,43 @@ internal static class WorkshopGameRules
         && profile is { AutoApplyGameSettings: true, GameSettings: { } template }
         && !template.Source.Equals(owner.ToString("X16"), StringComparison.OrdinalIgnoreCase)
         && profile.AppliedGameSettings.GetValueOrDefault(owner.ToString("X16")) != template.Id;
+
+    internal static WorkshopGameTemplate LayoutOnly(WorkshopGameTemplate template)
+    {
+        Validate(template);
+        if (!template.Scope.Layout || !template.Windows.Any(w => w.Layout == template.CurrentLayout))
+            throw new InvalidDataException("当前配置没有保存其他界面布局，请先读取界面布局。");
+        var result = WorkshopProfiles.Copy(template);
+        result.Scope = new(true, false, false, false);
+        result.Options.Clear(); result.Keys.Clear(); result.KeySchema = ""; result.LocalHudSnapshot = null;
+        Validate(result); return result;
+    }
+
+    internal static WorkshopGameTemplate UpdateLayout(WorkshopGameTemplate? previous, WorkshopGameTemplate captured)
+        => UpdateSelected(previous, LayoutOnly(captured));
+
+    internal static WorkshopGameTemplate UpdateSelected(WorkshopGameTemplate? previous, WorkshopGameTemplate captured)
+    {
+        Validate(captured);
+        var update = WorkshopProfiles.Copy(captured); update.LocalHudSnapshot = null;
+        if (previous is null) return update;
+        Validate(previous);
+        var result = WorkshopProfiles.Copy(previous);
+        result.Id = Guid.NewGuid().ToString("N"); result.Source = captured.Source;
+        result.SourceName = captured.SourceName; result.CapturedAt = captured.CapturedAt;
+        if (update.Scope.Layout) { result.CurrentLayout = update.CurrentLayout; result.Windows = update.Windows; }
+        if (update.Scope.Bindings)
+        {
+            result.StructsId = update.StructsId; result.KeySchema = update.KeySchema;
+            result.KeySize = update.KeySize; result.KeyCount = update.KeyCount; result.Keys = update.Keys;
+        }
+        result.Options.RemoveAll(o => o.Section == "System" ? update.Scope.System : update.Scope.Character);
+        result.Options.AddRange(update.Options);
+        result.Scope = new(result.Scope.Layout || update.Scope.Layout, result.Scope.Character || update.Scope.Character,
+            result.Scope.Bindings || update.Scope.Bindings, result.Scope.System || update.Scope.System);
+        result.LocalHudSnapshot = null;
+        Validate(result); return result;
+    }
     private static readonly HashSet<string> SystemNames = new(StringComparer.Ordinal)
     {
         "Gamma", "CharaLight", "MouseSpeed", "CameraZoom", "MouseAutoFocus", "ColorThemeType",

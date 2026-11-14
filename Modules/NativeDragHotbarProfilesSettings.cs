@@ -40,41 +40,51 @@ public sealed partial class NativeDragHotbar
         ImGui.BeginDisabled(readOnly || superReadOnly);
         DrawWorkshopProfileToolbar();
         ImGui.Spacing();
-        ImGui.TextWrapped("本机登录其他角色时继续使用当前选择。设置自动保存；游戏设置模板仅在确认应用或开启自动应用后写入游戏。");
+        ImGui.TextWrapped("本机其他角色沿用当前配置，日常修改自动保存。写入角色请到「还原到游戏」。");
         if (workshopLibrary.Current.Takeover is null)
         {
-            if (ImGui.Button("读取游戏配置…")) BeginSuperNativeRead();
+            if (ImGui.Button("读取游戏热键栏…")) BeginSuperNativeRead();
         }
-        else if (ImGui.Button("保存"))
+        else if (ImGui.Button("保存当前配置"))
         {
             workshopDirty = true; SaveWorkshop(true);
             superStatus = workshopSaveError.Length == 0 ? "当前配置已保存，自定义指令和布局已保留。" : "保存未完成，请重试：" + workshopSaveError;
         }
-        ImGui.SameLine();
-        ImGui.BeginDisabled(super is null);
-        if (ImGui.Button("更新用户宏备份…"))
-        { ClearSuperImport(); workshopMacroConfirm = true; MarkWorkshopOperation(); }
-        ImGui.EndDisabled();
         ImGui.SameLine();
         if (ImGui.Button("导入配置…")) BeginWorkshopImport();
         ImGui.SameLine();
         if (ImGui.Button("导出配置…"))
         { workshopExportScope = 0; ImGui.OpenPopup("WorkshopExport"); }
         DrawWorkshopExport();
+        ImGui.Spacing();
+        if (ImGui.CollapsingHeader("从游戏读取（更新备份）"))
+        {
+            DrawWorkshopGameCaptureSettings();
+            ImGui.Separator();
+            ImGui.TextWrapped("用户宏平时直接读取游戏中的最新内容。只有需要留一份可恢复的正文备份时，才需更新。");
+            ImGui.BeginDisabled(super is null);
+            if (ImGui.Button("更新用户宏备份…"))
+            { ClearSuperImport(); workshopMacroConfirm = true; MarkWorkshopOperation(); }
+            ImGui.EndDisabled();
+            if (workshopLibrary.Current.Takeover is not null && ImGui.TreeNodeEx("重新读取热键栏（覆盖接管档案）"))
+            {
+                ImGui.TextWrapped("会覆盖工坊栏内容、自定义指令、布局和快捷键。日常修改点「保存当前配置」即可。");
+                if (ImGui.Button("重新读取游戏热键栏…")) BeginSuperNativeRead();
+                ImGui.TreePop();
+            }
+        }
+        if (ImGui.CollapsingHeader("备份详情与管理"))
+        {
+            DrawWorkshopBackupInfo();
+            DrawWorkshopGameBackupDetails();
+            DrawSuperResetSettings();
+        }
+        // Confirmations remain visible even when their source section is collapsed.
         DrawWorkshopReadPreview();
         DrawWorkshopMacroBackup();
         DrawWorkshopImportPreview();
-        if (workshopLibrary.Current.Takeover is not null && ImGui.TreeNodeEx("重新读取游戏配置"))
-        {
-            ImGui.TextWrapped("仅在需要用游戏内容重建接管档案时使用。会覆盖工坊中编辑的自定义指令、栏位、布局和快捷键；日常修改会自动保存，无需重新读取。");
-            if (ImGui.Button("重新读取游戏配置…")) BeginSuperNativeRead();
-            ImGui.TreePop();
-        }
-        ImGui.Separator();
-        DrawWorkshopBackupInfo();
-        ImGui.Separator();
-        DrawWorkshopGameSettings();
-        DrawSuperResetSettings();
+        if (workshopGameOperation is 1 or 4) DrawWorkshopGameOperation();
+        DrawWorkshopGameStatus();
         ImGui.EndDisabled();
         if (workshopSaveError.Length > 0)
         {
@@ -89,7 +99,7 @@ public sealed partial class NativeDragHotbar
     {
         if (workshopLibrary is null) return;
         ImGui.AlignTextToFramePadding(); ImGui.TextUnformatted("当前配置"); ImGui.SameLine();
-        ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X - 240, 160, 420));
+        ImGui.SetNextItemWidth(Math.Clamp(ImGui.GetContentRegionAvail().X - 90, 160, 420));
         if (BeginStyledCombo("##WorkshopProfile", workshopLibrary.Current.Name))
         {
             foreach (var entry in workshopLibrary.Profiles.ToArray())
@@ -102,19 +112,19 @@ public sealed partial class NativeDragHotbar
             EndStyledCombo();
         }
         ImGui.SameLine();
-        ImGui.BeginDisabled(workshopLibrary.Profiles.Count >= WorkshopProfiles.MaximumProfiles);
-        if (ImGui.Button("＋##WorkshopNew")) ImGui.OpenPopup("WorkshopNew");
-        if (ImGui.BeginPopup("WorkshopNew"))
+        if (ImGui.Button("管理…")) ImGui.OpenPopup("WorkshopManage");
+        if (ImGui.BeginPopup("WorkshopManage"))
         {
+            ImGui.BeginDisabled(workshopLibrary.Profiles.Count >= WorkshopProfiles.MaximumProfiles);
             if (ImGui.Selectable("新建空配置")) BeginWorkshopNameEdit(1);
             if (ImGui.Selectable("复制当前配置")) BeginWorkshopNameEdit(2);
+            ImGui.EndDisabled();
+            if (ImGui.Selectable("重命名")) BeginWorkshopNameEdit(3);
+            ImGui.BeginDisabled(workshopLibrary.Profiles.Count <= 1);
+            if (ImGui.Selectable("删除配置…")) BeginWorkshopNameEdit(4);
+            ImGui.EndDisabled();
             ImGui.EndPopup();
         }
-        ImGui.EndDisabled(); ImGui.SameLine();
-        if (ImGui.Button("重命名")) BeginWorkshopNameEdit(3);
-        ImGui.SameLine(); ImGui.BeginDisabled(workshopLibrary.Profiles.Count <= 1);
-        if (ImGui.Button("删除配置…")) BeginWorkshopNameEdit(4);
-        ImGui.EndDisabled();
         if (workshopNameAction == 0) return;
         var action = workshopNameAction;
         if (action == 4) ImGui.TextWrapped("删除当前选中的配置？其他配置和游戏设置保留，至少保留一套配置。");
@@ -165,7 +175,7 @@ public sealed partial class NativeDragHotbar
         var replacing = workshopLibrary?.Current.Takeover is not null;
         if (replacing)
         {
-            ImGui.TextWrapped("重新读取会覆盖接管档案及工坊自定义指令。保存现有修改请取消，再点“保存”。");
+            ImGui.TextWrapped("重新读取会覆盖接管档案及工坊自定义指令。保存现有修改请取消，再点「保存当前配置」。");
             ImGui.Checkbox("我确认用游戏配置覆盖现有接管档案和自定义指令", ref workshopReadOverwrite);
         }
         ImGui.BeginDisabled(!WorkshopOperationValid || replacing && !workshopReadOverwrite);
@@ -281,7 +291,7 @@ public sealed partial class NativeDragHotbar
             if (workshopExportScope < 2)
             {
                 ImGui.TextUnformatted("导出使用已保存的宏备份。");
-                ImGui.TextUnformatted("需要更新时，先点“更新用户宏备份”。");
+                ImGui.TextUnformatted("需要更新时，到「从游戏读取」更新宏备份。");
             }
             var unavailable = workshopExportScope == 1 && super is null || workshopExportScope >= 2 && profile.Bars.Count == 0;
             ImGui.BeginDisabled(unavailable);
@@ -314,6 +324,6 @@ public sealed partial class NativeDragHotbar
             : super.MacroBackupCharacter.Length > 0 ? "角色 " + super.MacroBackupCharacter : "旧档案，来源未记录";
         var timestamp = DateTimeOffset.TryParse(super.MacroBackupAt, out var at) ? at.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "未记录";
         ImGui.TextWrapped($"用户宏备份：{source} · {timestamp}");
-        ImGui.TextWrapped("接管栏和扩展栏都执行当前角色的用户宏；备份正文只用于主动恢复。更新宏备份不改动其他设置。");
+        ImGui.TextWrapped("接管栏和扩展栏执行当前角色的用户宏；备份正文仅用于主动写入游戏。");
     }
 }

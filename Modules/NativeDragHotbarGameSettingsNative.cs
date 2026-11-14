@@ -12,6 +12,20 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 
 internal static unsafe class WorkshopGameNative
 {
+    internal static List<WorkshopLiveHudWindow> LiveHud(WorkshopGameTemplate template)
+    {
+        var result = new List<WorkshopLiveHudWindow>();
+        var manager = RaptureAtkUnitManager.Instance();
+        if (manager == null) return result;
+        foreach (var window in template.Windows.Where(w => w.Layout == template.CurrentLayout))
+        {
+            var unit = manager->GetAddonByName(window.Name);
+            if (unit == null || unit->RootNode == null || !unit->IsVisible) continue;
+            var scale = unit->GetScale();
+            if (float.IsFinite(scale)) result.Add(new(window.Name,unit->X,unit->Y,scale));
+        }
+        return result;
+    }
     private static string StructsId => typeof(AddonConfig).Assembly.ManifestModule.ModuleVersionId.ToString("D");
     private static readonly Lazy<string> KeySchema = new(() => WorkshopGameKeySchema.Fingerprint(typeof(Keybind), typeof(InputId)));
     internal static void Require(ulong owner)
@@ -70,7 +84,7 @@ internal static unsafe class WorkshopGameNative
         var storage = set->ConfigEntries;
         var count = set->UsedAddonConfigEntries.LongCount;
         if (count < 0 || count > storage.Length) throw new InvalidOperationException("游戏窗口列表未就绪，请稍后重试。");
-        var visited = new HashSet<nint>(); var read = 0;
+        var visited = new HashSet<nint>(); var windowHashes = new HashSet<uint>(); var read = 0;
         if (count > 0) fixed (AddonConfigEntry* first = storage)
             foreach (var pointer in set->UsedAddonConfigEntries)
             {
@@ -79,21 +93,28 @@ internal static unsafe class WorkshopGameNative
                 if (++read > count || address < start || address - start >= (nuint)(storage.Length * sizeof(AddonConfigEntry))
                     || (address - start) % (nuint)sizeof(AddonConfigEntry) != 0 || !visited.Add((nint)entry))
                     throw new InvalidOperationException("游戏窗口列表正在变化，请稍后重试。");
-                if (entry->HasValue && names.TryGetValue(entry->AddonNameHash, out var name) && !hud.Contains(name))
+                // Native lookup uses the first matching hash in the used list. Distinct
+                // storage cells can carry the same name; they are not separate windows.
+                if (entry->HasValue && windowHashes.Add(entry->AddonNameHash)
+                    && names.TryGetValue(entry->AddonNameHash, out var name) && !hud.Contains(name))
                     result.Windows.Add(Read(*entry, name, -1));
             }
         if (read != count) throw new InvalidOperationException("游戏窗口列表读取不完整，请稍后重试。");
         var entries = set->HudLayoutConfigEntries;
         if (localBackup) result.LocalHudSnapshot = [];
         for (var layout = 0; layout < 4; layout++)
+        {
+            var hudHashes = new HashSet<uint>();
             for (var i = layout * 112; i < (layout + 1) * 112 && entries[i].HasValue; i++)
             {
                 // Each HUD is a HasValue-terminated prefix, just like ApplyHudLayout's
                 // native search. Stale cells beyond its terminator are not settings.
+                if (!hudHashes.Add(entries[i].AddonNameHash)) continue;
                 if (names.TryGetValue(entries[i].AddonNameHash, out var name) && hud.Contains(name))
                     result.Windows.Add(Read(entries[i], name, layout));
                 result.LocalHudSnapshot?.Add(Read(entries[i], "", layout));
             }
+        }
         result.Windows = result.Windows.OrderBy(w => w.Layout).ThenBy(w => w.Name, StringComparer.Ordinal).ToList();
     }
     internal static WorkshopGameTemplate Capture(ulong owner, WorkshopGameScope scope, bool localBackup = true)
@@ -225,13 +246,9 @@ internal static unsafe class WorkshopGameNative
     private static void ApplyCore(WorkshopGameTemplate template, ulong owner, bool rollback = false)
     {
         Require(owner); var addon = AddonConfig.Instance(); var input = UIInputData.Instance();
-        // A read-back failure must not prevent restoration of the already validated
-        // application-before backup by trying to read the same broken state again.
-        var current = rollback ? null : Capture(owner, template.Scope);
-        var actualWindows = current?.Windows.ToDictionary(w => (w.Layout, w.Name));
-        var layoutChanged = template.Scope.Layout && (rollback || current!.CurrentLayout != template.CurrentLayout
-            || template.Windows.Any(w => !actualWindows!.TryGetValue((w.Layout, w.Name), out var old) || old != w)
-            || template.LocalHudSnapshot is { } exact && !exact.SequenceEqual(current!.LocalHudSnapshot ?? []));
+        // Manual re-application also refreshes loaded HUD nodes when saved values already
+        // match. Matching configuration is not proof that the live interface has refreshed.
+        var layoutChanged = template.Scope.Layout;
         var hud = layoutChanged ? HudPlan(template, addon->ActiveDataSet) : null;
         foreach (var option in template.Options)
         {
@@ -255,9 +272,11 @@ internal static unsafe class WorkshopGameNative
         }
         if (hud is not null)
         {
-            foreach (var window in template.Windows.Where(w => w.Layout < 0))
+            foreach (var window in template.Windows.Where(w => w.Layout < 0 || w.Layout == template.CurrentLayout))
             {
                 // This native accessor maintains used/unused lists; never copy those lists or pointers.
+                // ApplyHudLayout iterates this used list, not every saved HUD entry. Register
+                // current-layout HUD entries too, including on a newly configured character.
                 var entry = addon->GetConfigEntryByAddonName(window.Name);
                 if (entry == null) throw new IOException("无法分配游戏窗口设置：" + window.Name);
                 Write(ref *entry, window);

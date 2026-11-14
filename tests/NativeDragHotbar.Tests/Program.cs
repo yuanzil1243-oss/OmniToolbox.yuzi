@@ -42,6 +42,8 @@ try
     RestorePreviewChecks.Run(Check);
     NativeReadChecks.Run(root, temp, Check, Reject);
     GeometryAndChargeChecks.Run(root, Check, Reject);
+    Workshop252Checks.Run(Check, Reject);
+    Workshop253Checks.Run(Check);
     var profile = HotbarProfileStore.Load(path, owner, out var recovered);
     Check(!recovered && profile.Owner == owner.ToString("X16") && profile.Bars.Single().Slots.Count == 12, "new character gets twelve empty slots");
     profile.Bars.Add(new() { Name = "第二栏 面板" });
@@ -500,12 +502,14 @@ try
     VisibilityPersistenceChecks.Compiled(assembly, Check);
     NativeMouseChecks.Compiled(assembly, structs, Check);
     GameSettingsChecks.Compiled(assembly, structs, Check);
+    Workshop252Checks.Compiled(assembly, Check);
+    Workshop253Checks.Compiled(assembly, Check);
     TemplateCompatibilityChecks.Compiled(assembly, structs, Check);
     UiAndOptionRegressionChecks.Compiled(assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 1, 0)
-        && version.FileVersion == "2.5.1.0" && version.ProductVersion == "2.5.1"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.1", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 3, 0)
+        && version.FileVersion == "2.5.3.0" && version.ProductVersion == "2.5.3"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.3", "module, assembly identity, assembly version and file version agree");
     Check(new[] { "PollHotbarClickSample", "BeginHotbarClickSample", "RecordHotbarClick", "EndHotbarClickSample", "DrawHotbarClickDiagnostics", "RebuildHotbarInputWindows" }
         .All(name => type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance) is null),
         "release assembly excludes click sampling, diagnostic panel and manual rebuild tools");

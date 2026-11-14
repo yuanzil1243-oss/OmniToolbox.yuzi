@@ -113,7 +113,7 @@ internal static class GameSettingsChecks
             "compiled native apply uses typed entries/list-aware accessor, refreshes HUD and requests game saves without unsafe native blob import");
         check(Calls(native, "Apply").Count(n => n == "ApplyCore") == 2 && Calls(native, "Apply").Contains("Compare"),
             "compiled game apply reads values back and attempts previous-settings recovery if it fails");
-        check(Calls(module, "DrawWorkshopArchiveSettings").Contains("DrawWorkshopGameSettings")
+        check(Calls(module, "DrawWorkshopArchiveSettings").Contains("DrawWorkshopGameCaptureSettings")
             && Calls(module, "UpdateSuper").Contains("UpdateWorkshopGameTemplate")
             && Calls(module, "UpdateWorkshopGameTemplate").Contains("ApplyWorkshopGameTemplate"),
             "template capture/manual preview and opt-in cross-character application are wired into actual archive UI and framework updates");
@@ -219,6 +219,18 @@ internal static class GameSettingsChecks
             var plan = (Array)planMethod.Invoke(null, [compiled, Pointer.Box((void*)memory, planMethod.GetParameters()[1].ParameterType)])!;
             check(((IEnumerable)plan.GetValue(0)!).Cast<object>().Count() == 1,
                 "actual HUD merge never resurrects stale cells past the native terminator");
+            Entry(ordinary, 1, inventory, 88); List(); Entry(hud, 1, widget, 99);
+            var nativeBytes = new byte[setType.StructLayoutAttribute.Size]; Marshal.Copy(memory,nativeBytes,0,nativeBytes.Length);
+            var duplicate = Capture(true); WorkshopGameRules.Validate(duplicate);
+            check(duplicate.Windows.Count == 3 && duplicate.Windows.Single(w=>w.Layout<0).X==20
+                && duplicate.Windows.Single(w=>w.Layout==0).X==20 && duplicate.LocalHudSnapshot is { Count: 2 },
+                "distinct valid native cells sharing a name use the first active entry for ordinary windows and each HUD");
+            var readback = new byte[nativeBytes.Length]; Marshal.Copy(memory,readback,0,readback.Length);
+            check(nativeBytes.SequenceEqual(readback),"duplicate native window capture never changes native storage");
+            List(1,0); var reorderedDuplicate=Capture(false); WorkshopGameRules.Validate(reorderedDuplicate);
+            check(reorderedDuplicate.Windows.Single(w=>w.Layout<0).X==88,
+                "duplicate-window selection follows native used-list order, not storage index");
+            Entry(ordinary,1,emote); Marshal.WriteByte(memory,hud+size+32,0); List(1,0);
             void Rejected(string label)
             {
                 try { Capture(true); throw new Exception("Invalid used-list entry accepted: " + label); }

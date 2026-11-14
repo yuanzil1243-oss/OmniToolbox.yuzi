@@ -38,8 +38,11 @@ public sealed partial class NativeDragHotbar
 
     private void ResetWorkshopRuntime()
     {
+        takeoverViewport.Reset();
         nativeDetails?.Release(); superReady = false; RestoreSuperVisibility();
         ClearWorkshopGameOperation(); workshopGameReadyAt = 0; workshopGameSaveWatch = null;
+        workshopGameLiveCheck = superRestoreLiveCheck = null;
+        superRestoreLayoutTarget = superRestoreLayoutBefore = null; superRestoreLayoutBackupPath = "";
         workshopGameStatus = workshopGameBackupPath = "";
         builtInRepeat.Clear(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
         superGroup = -1; superPage = 0; superRecording = -1; superBindingDraft = null;

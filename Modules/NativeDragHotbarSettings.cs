@@ -82,7 +82,7 @@ public sealed partial class NativeDragHotbar
             superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown);
         }
         if (superSettingsTab == 3) { ClearSuperImport(); superResetConfirm = 0; }
-        if (superSettingsTab == 4) { restoreConfirm = false; superRestorePreview = null; }
+        if (superSettingsTab == 4) { restoreConfirm = false; superRestorePreview = null; ClearWorkshopGameOperation(); }
         superSettingsTab = tab;
     }
 
@@ -136,6 +136,7 @@ public sealed partial class NativeDragHotbar
         var locked = super.Locked;
         if (ImGui.Checkbox("锁定格子和栏位", ref locked)) SetSuperLocked(locked);
         ImGui.TextWrapped("锁定后不能拖换、编辑或移动，仍可使用技能。也可点击主栏左下角的锁切换。");
+        DrawTakeoverViewportSettings();
         var builtIn = super.BuiltInRepeat;
         if (ImGui.Checkbox("按住快捷键连续使用", ref builtIn))
         { super.BuiltInRepeat = builtIn; superDirty = true; builtInRepeat.Clear(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown); }
@@ -493,32 +494,45 @@ public sealed partial class NativeDragHotbar
     private void DrawSuperRestoreSettings()
     {
         if (!RequireSuperSettingsArchive()) return;
-        ImGui.TextWrapped("此页会把选中的模块配置写回游戏。只想使用游戏原有热键栏时，点击顶部“退出接管”即可。");
+        ImGui.TextWrapped("把已保存的配置写入当前角色。读取和保存配置请到「备份与导入」。");
+        if (workshopGameOperation is 2 or 3)
+        {
+            DrawWorkshopGameOperation(); DrawWorkshopGameStatus(); return;
+        }
+        DrawWorkshopGameStatus();
         ImGui.Separator();
-        ImGui.TextUnformatted("1. 选择还原内容");
-        var changed = ImGui.Checkbox("全部已备份职业的普通栏内容和公用属性", ref restoreContents);
-        changed |= ImGui.Checkbox("热键栏相关主、副快捷键", ref restoreBindings);
-        changed |= ImGui.Checkbox("热键栏显示、位置、缩放等设置", ref restoreOptions);
-        changed |= ImGui.Checkbox("宏名称、图标和正文（覆盖个人宏与共通宏）", ref restoreMacros);
-        changed |= ImGui.Checkbox("同时还原十字热键栏", ref restoreCross);
+        ImGui.TextUnformatted("选择写入内容");
+        var changed = ImGui.Checkbox("热键栏内容与公用属性（全部已备份职业）", ref restoreContents);
+        changed |= ImGui.Checkbox("热键栏快捷键", ref restoreBindings);
+        changed |= ImGui.Checkbox("热键栏显示与布局", ref restoreOptions);
+        changed |= ImGui.Checkbox("用户宏（覆盖个人宏与共通宏）", ref restoreMacros);
+        changed |= ImGui.Checkbox("包括十字热键栏", ref restoreCross);
+        ImGui.BeginDisabled(!HasSavedOtherLayout);
+        changed |= ImGui.Checkbox("其他界面布局（角色状态、Buff、小队列表、小地图等）", ref restoreHudLayout);
+        ImGui.EndDisabled();
+        if (!HasSavedOtherLayout) ImGui.TextDisabled("尚未保存其他界面布局，请到「备份与导入 → 从游戏读取」补充。");
         if (changed) { restoreConfirm = false; superRestorePreview = null; }
-        var selected = restoreContents || restoreBindings || restoreOptions || restoreMacros;
+        var selected = restoreContents || restoreBindings || restoreOptions || restoreMacros || restoreHudLayout && HasSavedOtherLayout;
         var validAppearance = !restoreOptions || super.AppearanceMappingVersion == 1;
-        ImGui.TextWrapped("横竖排列请在游戏界面布局中调整。不会还原其他界面或套装装备；十字栏需与栏内容或栏设置一同选择。");
+        var writesHotbars = restoreContents || restoreBindings || restoreOptions || restoreMacros;
+        ImGui.TextWrapped(writesHotbars ? "写入热键栏或宏后会退出接管；十字栏需与栏内容或栏设置一同选择。"
+            : "只写入其他界面布局时继续接管。包括角色状态、Buff、小队列表和小地图的位置与缩放。");
         if (!validAppearance) ImGui.TextWrapped("请先退出接管，在“栏位与布局”重新读取全部布局，或取消还原栏设置。");
         ImGui.BeginDisabled(!selected || !validAppearance);
-        if (ImGui.Button("2. 预览还原…"))
+        if (ImGui.Button("预览写入…"))
             try { BuildSuperRestorePreview(SuperNativeArchive.Capture(owner)); }
             catch (Exception error) { restoreConfirm = false; superRestorePreview = null; superRestoreResult = "无法生成还原预览，未写入游戏：" + error.Message; }
         ImGui.EndDisabled();
         if (restoreConfirm && selected && validAppearance)
         {
             DrawSuperRestorePreviewRows();
-            ImGui.TextWrapped("确认后会先备份游戏当前配置，再还原并退出接管。完成后请重新登录，确认游戏已保存。");
-            if (ImGui.Button("3. 确认写回游戏并退出接管")) ConfirmSuperRestore();
+            ImGui.TextWrapped("确认后先备份当前角色设置，再写入。完成后请核对界面，下次登录时确认已保存。");
+            if (ImGui.Button(writesHotbars ? "确认写入并退出接管" : "确认写入界面布局")) ConfirmSuperRestore();
             ImGui.SameLine(); if (ImGui.Button("取消写回")) { restoreConfirm = false; superRestorePreview = null; }
         }
         if (superRestoreResult.Length > 0) { ImGui.Separator(); ImGui.TextWrapped(superRestoreResult); }
         if (!restoreConfirm && superRestoreBackupPath.Length > 0) ImGui.TextWrapped("还原前备份：" + superRestoreBackupPath);
+        if (!restoreConfirm && superRestoreLayoutBackupPath.Length > 0) ImGui.TextWrapped("其他界面布局备份：" + superRestoreLayoutBackupPath);
+        if (!restoreConfirm) DrawWorkshopGameWriteActions();
     }
 }

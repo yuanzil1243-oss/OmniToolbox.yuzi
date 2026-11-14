@@ -158,8 +158,8 @@ internal static class KeyboardAndVisualChecks
         {
             var state = new NativeSlotState(50, 38, charges, 3, false, charges > 0);
             check(NativeIconVisualRules.ShowCharges(state) && NativeIconVisualRules.ChargeDigit(state) == charges
-                && NativeIconVisualRules.RecastPartList(state) == 1
-                && NativeIconVisualRules.RecastFrame(state) == (charges == 0 ? 121 : 40),
+                && NativeIconVisualRules.RecastPartList(state) == (charges == 0 ? 4 : 1)
+                && NativeIconVisualRules.RecastFrame(state) == 40,
                 $"charge count {charges} uses native digit including zero/one and correct depleted/available atlas");
         }
         foreach (var percent in Enumerable.Range(0, 101))
@@ -167,7 +167,7 @@ internal static class KeyboardAndVisualChecks
             var ordinary = new NativeSlotState(percent, 10, 0, 1, false, true);
             var depleted = ordinary with { MaxCharges = 2 };
             if (NativeIconVisualRules.RecastFrame(ordinary) is < 1 or > 79
-                || NativeIconVisualRules.RecastFrame(depleted) is < 82 or > 160) throw new Exception("Cooldown atlas boundary");
+                || NativeIconVisualRules.RecastFrame(depleted) is < 1 or > 79) throw new Exception("Cooldown atlas boundary");
         }
         check(NativeIconVisualRules.RecastPartList(new(50, 11, 0, 1, false, true)) == 4,
             "all ordinary/depleted cooldown percentages stay in verified native ULD frame ranges");

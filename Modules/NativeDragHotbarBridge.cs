@@ -160,16 +160,18 @@ internal sealed unsafe class NativeHotbarBridge : IDisposable
         var manager = ActionManager.Instance();
         if (maxCharges > 1)
         {
-            // Never fall back to the misleading full-charge timer if the group is unavailable.
-            percent = seconds = 0;
+            float total = 0, elapsed = 0;
             if (manager != null)
             {
                 var group = manager->GetRecastGroup((int)ActionType.Action, scratch->ApparentActionId);
                 // Current client ActionManager has exactly 80 RecastDetail entries.
                 if (group is >= 0 and < 80)
-                    (percent, seconds) = NativeIconVisualRules.NextCharge(manager->GetRecastTimeForGroup(group),
-                        manager->GetRecastTimeElapsed(ActionType.Action, scratch->ApparentActionId), maxCharges, charges);
+                {
+                    total = manager->GetRecastTimeForGroup(group);
+                    elapsed = manager->GetRecastTimeElapsed(ActionType.Action, scratch->ApparentActionId);
+                }
             }
+            (percent, seconds) = NativeIconVisualRules.ChargeRecast(total, elapsed, maxCharges, charges, percent, seconds);
         }
         return new(Math.Clamp(percent, 0, 100), Math.Max(seconds, 0), charges, maxCharges,
             scratch->IsActionHighlighted(scratch->ApparentSlotType, scratch->ApparentActionId),

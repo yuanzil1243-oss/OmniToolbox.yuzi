@@ -237,7 +237,7 @@ public sealed partial class NativeDragHotbar
         if (!SuperActive) { RestoreSuperVisibility(); return; }
         if (!NativeHotbarUiContext.Visible()) { SuspendHotbarUi(); return; }
         UpdateSuperHudContext();
-        if (super!.Show)
+        if (super!.Show && !takeoverViewport.Hidden)
             for (var index = 0; index < 10; index++)
                 if (super.Appearance[index].Visible)
                     DrawSuperBar(super.Appearance[index], index, nativeDragging, supported);

@@ -85,8 +85,12 @@ internal sealed class SuperHotbarDocument
     public bool HideNative { get; set; } = true;
     public bool Locked { get; set; }
     public bool AllowKeyRepeater { get; set; } = true;
-    public bool BuiltInRepeat { get; set; }
-    public float RepeatCps { get; set; } = 10;
+    public bool BuiltInRepeat { get; set; } = true;
+    public float RepeatCps { get; set; } = 7;
+    public bool HideInSmallWindow { get; set; } = true;
+    public int SmallWindowPercent { get; set; } = 70;
+    public float WindowReferenceWidth { get; set; }
+    public float WindowReferenceHeight { get; set; }
     public int EmptySlotDefaultsVersion { get; set; }
     public int FirstPage { get; set; }
     // Zero identifies archives captured before the secondary addon naming was corrected.
@@ -177,6 +181,11 @@ internal static class SuperHotbarRules
             throw new InvalidDataException("原生配置档案结构无效。");
         if (!float.IsFinite(data.RepeatCps) || data.RepeatCps is < 1 or > 30)
             throw new InvalidDataException("内置连点速度应为 1～30 CPS。");
+        if (data.SmallWindowPercent is < 30 or > 95 || !float.IsFinite(data.WindowReferenceWidth)
+            || !float.IsFinite(data.WindowReferenceHeight) || data.WindowReferenceWidth is < 0 or > 32768
+            || data.WindowReferenceHeight is < 0 or > 32768
+            || (data.WindowReferenceWidth == 0) != (data.WindowReferenceHeight == 0))
+            throw new InvalidDataException("小窗口隐藏的比例或正常窗口大小无效。");
         var indices = new HashSet<int>();
         foreach (var group in data.Groups)
         {

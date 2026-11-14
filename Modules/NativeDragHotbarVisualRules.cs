@@ -22,11 +22,22 @@ internal static class NativeIconVisualRules
         var remaining = duration - progress;
         return (Math.Clamp((int)(progress / duration * 100), 1, 99), (int)Math.Ceiling(remaining - 0.00001));
     }
-    // ActionBar.uld: timelines 9 (ants 6..13), 11 (charge rings 1..79 / 82..160), 13 (ordinary 1..79).
+    public static (int Percent, int Seconds) ChargeRecast(float total, float elapsed, uint maxCharges,
+        uint charges, int nativePercent, int nativeSeconds)
+    {
+        if (charges >= maxCharges) return (0, 0);
+        var next = NextCharge(total, elapsed, maxCharges, charges);
+        if (next.Percent > 0) return next;
+        // An unavailable recast group must not erase the native zero-charge cooldown.
+        // For usable charges, a full-charge fallback would display the wrong countdown.
+        return charges == 0 ? (Math.Clamp(nativePercent, 0, 100), Math.Max(nativeSeconds, 0)) : (0, 0);
+    }
+    // A depleted action is unavailable: use the ordinary recast mask until its first charge.
+    // The orange charge ring is reserved for an action with at least one usable charge.
+    public static bool ChargeRing(NativeSlotState state) => state.MaxCharges > 1 && state.Charges > 0;
     public static int AntsFrame(double seconds) => 6 + (int)(Math.Max(0, seconds) * 30 % 8);
-    public static int RecastFrame(NativeSlotState state) => 1 + (int)Math.Clamp(state.CooldownPercent * 78 / 100f, 0, 78)
-        + (state.MaxCharges > 1 && state.Charges == 0 ? 81 : 0);
-    public static int RecastPartList(NativeSlotState state) => state.MaxCharges > 1 ? 1 : 4;
+    public static int RecastFrame(NativeSlotState state) => 1 + (int)Math.Clamp(state.CooldownPercent * 78 / 100f, 0, 78);
+    public static int RecastPartList(NativeSlotState state) => ChargeRing(state) ? 1 : 4;
     public static bool ShowCharges(NativeSlotState state) => state.MaxCharges > 1;
     public static int ChargeDigit(NativeSlotState state) => (int)Math.Min(state.Charges, 9);
     public static bool Cooling(NativeSlotState state) => state.CooldownPercent is > 0 and <= 100;
