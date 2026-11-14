@@ -507,9 +507,9 @@ try
     TemplateCompatibilityChecks.Compiled(assembly, structs, Check);
     UiAndOptionRegressionChecks.Compiled(assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 3, 0)
-        && version.FileVersion == "2.5.3.0" && version.ProductVersion == "2.5.3"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.3", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 4, 0)
+        && version.FileVersion == "2.5.4.0" && version.ProductVersion == "2.5.4"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.4", "module, assembly identity, assembly version and file version agree");
     Check(new[] { "PollHotbarClickSample", "BeginHotbarClickSample", "RecordHotbarClick", "EndHotbarClickSample", "DrawHotbarClickDiagnostics", "RebuildHotbarInputWindows" }
         .All(name => type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance) is null),
         "release assembly excludes click sampling, diagnostic panel and manual rebuild tools");

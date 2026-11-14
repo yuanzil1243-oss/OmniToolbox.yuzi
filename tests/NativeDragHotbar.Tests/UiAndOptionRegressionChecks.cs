@@ -40,6 +40,11 @@ internal static class UiAndOptionRegressionChecks
         const string ns = "OmniToolbox.NativeDragHotbarLocal.";
         var module = assembly.GetType(ns + "NativeDragHotbar", true)!;
         string[] Calls(Type t, string name) => ItemAndFontChecks.Calls(t.GetMethod(name, flags)!).ToArray();
+        var input = Calls(module, "SuperInputAllowed");
+        check(!input.Contains("IsMouseDown") && input.Contains("IsTextInputActive") && input.Contains("get_WantTextInput")
+            && input.Contains("HudEditing") && input.Contains("get_IsDragging") && input.Contains("IsGameForeground")
+            && Calls(module, "UpdateSuper").Contains("SuperInputAllowed") && Calls(module, "RepeatSuperShortcut").Contains("SuperInputAllowed"),
+            "ordinary mouse clicks cannot cancel built-in/external held-key repeats; text input, native dragging, HUD editing and foreground checks remain");
         var native = assembly.GetType(ns + "WorkshopGameNative", true)!;
         var preflight = Calls(native, "Preflight");
         check(preflight.Contains("FloatCompatible") && preflight.Contains("UIntCompatible") && preflight.Contains("get_Default")

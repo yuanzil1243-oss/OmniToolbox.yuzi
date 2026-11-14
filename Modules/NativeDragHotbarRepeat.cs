@@ -49,7 +49,9 @@ public sealed partial class NativeDragHotbar
         return atk != null && atk->IsUiVisible && NativeHotbarBridge.IsGameForeground()
             && !atk->IsTextInputActive() && !ImGui.GetIO().WantTextInput
             && !editorOpen && replacing is null && superRecording < 0 && !restoreConfirm && superImport is null && superResetConfirm == 0
-            && bridge?.IsDragging != true && !ImGui.IsMouseDown(ImGuiMouseButton.Left)
+            // Ordinary UI clicks must not revoke held-key repeat ownership. Suspend
+            // only an actual native payload, slot drag or whole-bar move.
+            && bridge?.IsDragging != true && localDragBar is null && movingBar is null
             && !NativeHotbarBridge.IsKeyDown(91) && !NativeHotbarBridge.IsKeyDown(92);
     }
 
