@@ -14,7 +14,7 @@ internal sealed class NativeHotbarGameFonts : IDisposable
     private IFontAtlas? ownedAtlas;
     internal bool Started => create is not null;
     public string Status { get; private set; } = "等待游戏字体资源";
-    public void Start(IFontAtlas atlas) { Dispose(); create = atlas.NewGameFontHandle; Status = "将跟随原生热键栏文字节点的游戏字体与字号"; }
+    public void Start(IFontAtlas atlas) { Dispose(); create = atlas.NewGameFontHandle; Status = "准备使用游戏内置字体"; }
     internal void StartOwned(IFontAtlas atlas) { Start(atlas); ownedAtlas = atlas; }
     internal static GameFontFamily Family(byte family) => family switch
     {
@@ -38,7 +38,7 @@ internal sealed class NativeHotbarGameFonts : IDisposable
                 handles.Add(key, handle = create(new(Family(style.Family), key.Item2)));
             }
             Status = handle.LoadException is { } error ? "游戏字体暂不可用，保留备用文字：" + error.Message
-                : handle.Available ? "正在使用原生热键栏节点对应的游戏字体与字号" : "游戏字体加载中，暂用备用文字";
+                : handle.Available ? "正在使用游戏内置字体" : "游戏字体加载中，暂用备用文字";
             // The managed handle owns the font lock, push/pop and async-atlas rebuild lifetime.
             return handle.Push();
         }
@@ -69,7 +69,7 @@ internal static unsafe class NativeHotbarFontReader
         ref var source = ref addon->ActionBarSlotVector[slot];
         var icon = source.ComponentDragDrop == null ? null : source.ComponentDragDrop->AtkComponentIcon;
         return new(Read(source.ControlHintTextNode, fallback.Shortcut),
-            Read(icon == null ? null : icon->GetTextNodeById(8), fallback.Timer),
+            fallback.Timer,
             Read(icon == null ? null : icon->QuantityText, fallback.Quantity));
     }
 }

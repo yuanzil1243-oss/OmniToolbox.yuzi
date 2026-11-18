@@ -41,6 +41,9 @@ internal readonly record struct NativeHotbarFontStyle(byte Family, byte Size)
 internal readonly record struct NativeHotbarTextStyles(NativeHotbarFontStyle Shortcut,
     NativeHotbarFontStyle Timer, NativeHotbarFontStyle Quantity)
 {
+    // Takeover timers have their own readable game font, independent of hidden
+    // native labels and other modules. Keep Default unchanged for extension bars.
+    internal static NativeHotbarFontStyle TakeoverTimer => new(3, 24);
     // Read-only client evidence: shortcut MiedingerMed 12; icon text nodes 8/9 Axis 12.
     internal static NativeHotbarTextStyles Default => new(new(1, 12), new(0, 12), new(0, 12));
 }

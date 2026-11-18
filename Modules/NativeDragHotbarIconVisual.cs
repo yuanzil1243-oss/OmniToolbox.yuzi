@@ -116,7 +116,8 @@ internal sealed class NativeHotbarIconVisual
     }
 
     private static void StyledText(ImDrawListPtr list, string text, Vector2 anchor, Vector2 align,
-        NativeHotbarFontStyle style, float scale, float maxWidth, NativeHotbarGameFonts? fonts, uint color)
+        NativeHotbarFontStyle style, float scale, float maxWidth, NativeHotbarGameFonts? fonts, uint color,
+        bool centerInk = false)
     {
         var pixels = style.Pixels(scale);
         var scope = fonts?.PushPixels(style, pixels);
@@ -130,15 +131,63 @@ internal sealed class NativeHotbarIconVisual
                 scope = fonts?.PushPixels(style, pixels);
                 measured = ImGui.CalcTextSize(text) * (pixels / ImGui.GetFontSize());
             }
-            Text(list, text, anchor - measured * align, pixels, color);
+            var ink = centerInk ? TimerInk(text, pixels) : new HotbarRect(Vector2.Zero, measured);
+            Text(list, text, anchor - ink.Min - (ink.Max - ink.Min) * align, pixels, color);
         }
         finally { scope?.Dispose(); }
+    }
+
+    // Game numeric fonts have asymmetric bearings and line padding. Center the
+    // visible digits rather than the font's line box; use the same glyph metrics
+    // and pair adjustments as ImGui's text renderer.
+    internal static unsafe HotbarRect TimerInk(string text, int pixels)
+    {
+        var font = ImGui.GetFont();
+        var scale = pixels / font.FontSize;
+        var low = new Vector2(float.PositiveInfinity);
+        var high = new Vector2(float.NegativeInfinity);
+        var cursor = 0f;
+        ushort previous = 0;
+        foreach (var c in text)
+        {
+            var glyph = font.FindGlyph(c);
+            if (glyph == null) continue;
+            if (previous != 0) cursor += font.GetDistanceAdjustmentForPair(previous, c);
+            if (glyph->Visible != 0)
+            {
+                low = Vector2.Min(low, new Vector2(cursor + glyph->X0, glyph->Y0) * scale);
+                high = Vector2.Max(high, new Vector2(cursor + glyph->X1, glyph->Y1) * scale);
+            }
+            cursor += glyph->AdvanceX;
+            previous = c;
+        }
+        return float.IsFinite(low.X) ? new(low, high)
+            : new(Vector2.Zero, ImGui.CalcTextSize(text) * (pixels / ImGui.GetFontSize()));
     }
 
     public void Draw(ImDrawListPtr list, string bar, int slot, ulong identity, NativeSlotState state,
         string shortcut, Vector2 min, Vector2 max, double seconds, float alpha)
         => DrawStyled(list, bar, slot, identity, state, shortcut, min, max, seconds, alpha,
             null, NativeHotbarTextStyles.Default, true);
+
+    internal static HotbarRect TakeoverBounds(NativeSlotState state, Vector2 min, Vector2 max,
+        NativeHotbarGameFonts? fonts, NativeHotbarTextStyles styles)
+    {
+        var size = max - min;
+        var bounds = new HotbarRect(min - size * 0.2f, max + size * 0.2f);
+        if (state.Seconds <= 0) return bounds;
+        var timerStyle = NativeHotbarTextStyles.TakeoverTimer;
+        var pixels = timerStyle.Pixels(size.Y / 48);
+        using var scope = fonts?.PushPixels(timerStyle, pixels);
+        var ink = TimerInk(state.Seconds.ToString(), pixels);
+        var half = (ink.Max - ink.Min) * 0.5f;
+        var center = (min + max) * 0.5f;
+        var padding = new Vector2(3);
+        // Native-window occlusion must cover the enlarged text as well as the icon.
+        // Otherwise merely opening a distant game window clips the number back down.
+        return new(Vector2.Min(bounds.Min, center - half - padding),
+            Vector2.Max(bounds.Max, center + half + padding));
+    }
 
     internal void DrawStyled(ImDrawListPtr list, string bar, int slot, ulong identity, NativeSlotState state,
         string shortcut, Vector2 min, Vector2 max, double seconds, float alpha,
@@ -177,8 +226,9 @@ internal sealed class NativeHotbarIconVisual
         if (state.Seconds > 0)
         {
             var timer = state.Seconds.ToString();
-            StyledText(list, timer, (min + max) / 2 + new Vector2(0, size.Y * 0.06f), new(0.5f),
-                styles.Timer, scale.Y, size.X * 0.9f, fonts, white);
+            StyledText(list, timer, (min + max) / 2 + (frame ? Vector2.Zero : new Vector2(0, size.Y * 0.06f)), new(0.5f),
+                frame ? NativeHotbarTextStyles.TakeoverTimer : styles.Timer,
+                scale.Y, frame ? float.PositiveInfinity : size.X * 0.9f, fonts, white, frame);
         }
         if (NativeIconVisualRules.ShowCharges(state))
         {

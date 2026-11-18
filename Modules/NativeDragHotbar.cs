@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.5.4";
+    public const string Version = "2.5.6";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -557,13 +557,13 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
                 list.AddImage(texture.Handle, min + (nativeGeometry ? new Vector2(4, 3) * (size / 48) : Vector2.One),
                     nativeGeometry ? min + new Vector2(44, 43) * (size / 48) : max - Vector2.One, Vector2.Zero, Vector2.One, tints.Image);
             if (!nativeGeometry || hovered) list.AddRect(min, max, tints.Frame, 3, ImDrawFlags.None, hovered ? 2 : 1);
-            if (nativeGeometry) DrawSuperSlotOverlay(list, bar, index, min, max);
-            else if (entry.HasNative && bridge is { Ready: true })
+            if (!nativeGeometry && entry.HasNative && bridge is { Ready: true })
                 superVisuals.DrawStyled(list, bar.Id, index, VisualIdentity(entry), bridge.State(entry), "", min, max,
                     Environment.TickCount64 / 1000.0, ImGui.GetStyle().Alpha, superFonts, NativeHotbarTextStyles.Default, false);
-            else superVisuals.DrawFeedback(list, bar.Id, index, VisualIdentity(entry), min, max,
+            else if (!nativeGeometry) superVisuals.DrawFeedback(list, bar.Id, index, VisualIdentity(entry), min, max,
                     Environment.TickCount64 / 1000.0, ImGui.GetStyle().Alpha);
         });
+        if (nativeGeometry) DrawSuperSlotOverlay(list, bar, index, min, max);
         if (replacing is null && allowInput && !locked)
             targets.Add(new(bar, index, nativeGeometry ? min + new Vector2(4, 3) * (size / 48) : min,
                 nativeGeometry ? min + new Vector2(44, 43) * (size / 48) : max, entry));

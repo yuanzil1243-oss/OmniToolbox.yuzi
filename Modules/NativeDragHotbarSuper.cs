@@ -259,10 +259,11 @@ public sealed partial class NativeDragHotbar
         var label = binding is null ? "" : binding.Primary.Key != 0 ? binding.Primary.Compact()
             : binding.Secondary.Key != 0 ? binding.Secondary.Compact()
             : binding.Primary.UnmappedNativeKey != 0 ? binding.Primary.Compact() : binding.Secondary.Compact();
-        superVisuals.DrawStyled(list, bar.Id, slot,
+        var styles = superFonts.Started ? NativeHotbarFontReader.Read(index, slot) : NativeHotbarTextStyles.Default;
+        var bounds = NativeHotbarIconVisual.TakeoverBounds(state, min, max, superFonts, styles);
+        DrawBelowNative(list, bounds, () => superVisuals.DrawStyled(list, bar.Id, slot,
             VisualIdentity(entry), state, label, min, max, Environment.TickCount64 / 1000.0,
-            ImGui.GetStyle().Alpha, superFonts,
-            superFonts.Started ? NativeHotbarFontReader.Read(index, slot) : NativeHotbarTextStyles.Default, true);
+            ImGui.GetStyle().Alpha, superFonts, styles, true));
     }
 
     private static ulong VisualIdentity(HotbarEntry entry)
