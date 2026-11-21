@@ -30,6 +30,7 @@ try
     GameSettingsChecks.Run(temp, Check, Reject);
     TemplateCompatibilityChecks.Run(temp, Check, Reject);
     UiAndOptionRegressionChecks.Run(Check);
+    ExtensionHide257Checks.Run(temp, Check);
     SuperHotbarChecks.Run(temp, Check, Reject);
     CrashRegressionChecks.Run(Check, Reject);
     ExecutionCompatibilityChecks.Run(Check, Reject);
@@ -507,10 +508,11 @@ try
     Workshop253Checks.Compiled(assembly, Check);
     TemplateCompatibilityChecks.Compiled(assembly, structs, Check);
     UiAndOptionRegressionChecks.Compiled(assembly, Check);
+    ExtensionHide257Checks.Compiled(assembly, Check);
     var version = FileVersionInfo.GetVersionInfo(dll);
-    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 6, 0)
-        && version.FileVersion == "2.5.6.0" && version.ProductVersion == "2.5.6"
-        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.6", "module, assembly identity, assembly version and file version agree");
+    Check(assembly.GetName().Name == "NativeDragHotbar" && assembly.GetName().Version == new Version(2, 5, 8, 0)
+        && version.FileVersion == "2.5.8.0" && version.ProductVersion == "2.5.8"
+        && (string)type.GetField("Version")!.GetRawConstantValue()! == "2.5.8", "module, assembly identity, assembly version and file version agree");
     Check(new[] { "PollHotbarClickSample", "BeginHotbarClickSample", "RecordHotbarClick", "EndHotbarClickSample", "DrawHotbarClickDiagnostics", "RebuildHotbarInputWindows" }
         .All(name => type.GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance) is null),
         "release assembly excludes click sampling, diagnostic panel and manual rebuild tools");

@@ -142,10 +142,12 @@ internal static class WorkshopProfiles
     public static int ImportExtensions(WorkshopProfile target, HotbarShareDocument imported, bool replace, bool globals)
     {
         Validate(target);
-        var extensions = replace ? new HotbarProfile { Owner = "0000000000000000", Show = target.Extensions.Show, Bars = [] }
+        var extensions = replace ? new HotbarProfile { Owner = "0000000000000000", Show = target.Extensions.Show,
+            FollowNativeHide = target.Extensions.FollowNativeHide, Bars = [] }
             : Copy(target.Extensions);
         var first = HotbarTransfer.Append(extensions, 0, imported);
         if (globals && imported.ShowAllBars is { } show) extensions.Show = show;
+        if (globals && imported.FollowNativeHide is { } follow) extensions.FollowNativeHide = follow;
         target.Extensions = extensions;
         if (globals && imported.ShowCommandMessages is { } messages) target.ShowCommandMessages = messages;
         return first;

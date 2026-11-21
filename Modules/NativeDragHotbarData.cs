@@ -53,6 +53,7 @@ internal sealed class HotbarProfile
     [JsonIgnore] public bool NeedsUpgradeSave { get; set; }
     public string Owner { get; set; } = "";
     public bool Show { get; set; } = true;
+    public bool FollowNativeHide { get; set; } = true;
     public List<DragHotbar> Bars { get; set; } = [new()];
 }
 

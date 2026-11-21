@@ -252,7 +252,7 @@ public sealed partial class NativeDragHotbar
         ImGui.TextWrapped($"扩展栏导入预览：{pendingImport.Bars.Count} 条栏位，默认追加到当前配置。");
         foreach (var bar in pendingImport.Bars) ImGui.TextUnformatted($"{bar.Name} · {bar.Columns} × {bar.Rows}");
         ImGui.Checkbox("替换当前配置的全部扩展栏", ref workshopReplaceExtensions);
-        if (pendingImport.ShowAllBars.HasValue || pendingImport.ShowCommandMessages.HasValue)
+        if (pendingImport.ShowAllBars.HasValue || pendingImport.ShowCommandMessages.HasValue || pendingImport.FollowNativeHide.HasValue)
             ImGui.Checkbox("同时导入显示和提示设置", ref importGlobalSettings);
         var exceeds = !workshopReplaceExtensions && profile.Bars.Count + pendingImport.Bars.Count > HotbarRules.MaxBars;
         if (exceeds) ImGui.TextWrapped("追加后超过 12 条，请选择替换，或先删除不需要的栏。");

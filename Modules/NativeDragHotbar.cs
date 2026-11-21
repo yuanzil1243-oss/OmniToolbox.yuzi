@@ -22,7 +22,7 @@ namespace OmniToolbox.NativeDragHotbarLocal;
 [ModuleApiVersion(1)]
 public sealed partial class NativeDragHotbar : OmniModuleBase
 {
-    public const string Version = "2.5.6";
+    public const string Version = "2.5.8";
     public override ModuleInfo Info { get; } = new() { Category = ModuleCategory.Interface,
         Author = "Yuzi", Commands = [] };
     public override ModuleLocalization Localization { get; } = ModuleLocalization.Create(new Dictionary<string, string>
@@ -39,6 +39,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         ["Retry"] = "重试保存",
         ["Recovered"] = "已从备份恢复；损坏的原文件已另存保留。",
         ["Show"] = "显示扩展栏",
+        ["FollowNativeHide"] = "跟随原生隐藏",
         ["Add"] = "新增热键栏",
         ["Remove"] = "删除当前栏…",
         ["RemoveTitle"] = "删除热键栏？###NDHRemove",
@@ -192,6 +193,13 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
         StartSuper(activation);
         StartNativeDetails(activation);
         var ui = DalamudServices.PluginInterface.UiBuilder;
+        if (!extensionDrawFallback.TryStart(ui, DrawExtensionsWhenHostHidden, out extensionDrawError, error =>
+            {
+                extensionDrawError = error.Message;
+                DalamudServices.PluginLog.Error(error, "热键栏工坊：扩展栏独立绘制已暂停，请重新启用模块");
+            }))
+            DalamudServices.PluginLog.Warning("热键栏工坊：扩展栏独立绘制暂不可用：" + extensionDrawError);
+        activation.OnStopping(extensionDrawFallback.Dispose);
         activation.OnStopping(() => ui.Draw -= Draw);
         ui.Draw += Draw;
         var command = new CommandInfo((_, argument) => { if (!TryHandleCommand(argument)) PrintCommandMessage(L("CommandUsage")); })
@@ -304,6 +312,11 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             if (ImGui.Button(L("Retry"))) Save();
         }
         Check(L("Show"), profile.Show, v => SetWorkshopVisibility(false, -1, v));
+        ImGui.SameLine();
+        ImGui.BeginDisabled(!extensionDrawFallback.Available);
+        if (Check(L("FollowNativeHide"), profile.FollowNativeHide, v => profile.FollowNativeHide = v)) dirty = true;
+        ImGui.EndDisabled();
+        if (extensionDrawError.Length > 0) ImGui.TextWrapped("当前框架不支持独立显示：" + extensionDrawError);
         if (ImGui.Button(L("Add")) && profile.Bars.Count < HotbarRules.MaxBars)
         { profile.Bars.Add(new() { Name = $"扩展栏 {profile.Bars.Count + 1}", Y = 300 + profile.Bars.Count * 60 }); selected = profile.Bars.Count - 1; sharedSettingsExpanded = true; dirty = true; }
         selected = Math.Clamp(selected, 0, Math.Max(0, profile.Bars.Count - 1));
@@ -432,6 +445,7 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
 
     private void Draw()
     {
+        hotbarDrawFrame = ImGui.GetFrameCount();
         nativeDetails?.BeginFrame();
         try
         {
@@ -445,7 +459,10 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             if (NativeHotbarBridge.TryGetGameClientOrigin(out var origin))
                 cursorOffset = ImGui.GetMainViewport().Pos - new Vector2(origin.X, origin.Y);
             if (owner == 0) return;
-            if (!NativeHotbarUiContext.Visible()) { SuspendHotbarUi(); return; }
+            var nativeVisible = NativeHotbarUiContext.Visible();
+            if (!nativeVisible) SuspendHotbarUi();
+            var extensionsVisible = NativeHotbarUiContext.ExtensionsVisible(profile.FollowNativeHide, nativeVisible);
+            if (!nativeVisible && !extensionsVisible) return;
             pluginWindowAtMouse = PluginWindowAtMouse(false);
             nativeTooltipPassthrough.Clear();
             nativeWindowCovers = NativeHotbarWindowLayers.Read(ImGui.GetMainViewport().Pos,
@@ -455,10 +472,10 @@ public sealed partial class NativeDragHotbar : OmniModuleBase
             var dragging = bridge?.IsDragging == true;
             var supported = dragging && bridge!.Preview();
             DrawSuperBars(dragging, supported);
-            if (profile.Show && !readOnly)
+            if (extensionsVisible && profile.Show && !readOnly)
                 foreach (var bar in profile.Bars.Where(b => b.Visible)) DrawBar(bar, dragging, supported);
-            DrawEditor();
-            DrawReplacement();
+            if (nativeVisible || editBar is not null && profile.Bars.Contains(editBar)) DrawEditor();
+            if (nativeVisible || replacing is not null && profile.Bars.Contains(replacing.Bar)) DrawReplacement();
             bridge?.PollRelease();
             if (!ImGui.IsMouseDown(ImGuiMouseButton.Left)) { localDragBar = null; localDragIndex = -1; movingBar = null; }
             if (dirty && !ImGui.IsMouseDown(ImGuiMouseButton.Left)) Save();

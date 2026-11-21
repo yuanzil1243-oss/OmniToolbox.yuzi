@@ -13,6 +13,7 @@ internal sealed class HotbarShareDocument
     public int Version { get; set; }
     public string ModuleVersion { get; set; } = "";
     public bool? ShowAllBars { get; set; }
+    public bool? FollowNativeHide { get; set; }
     public bool? ShowHelp { get; set; }
     public bool? ShowCommandMessages { get; set; }
     public List<DragHotbar> Bars { get; set; } = [];
@@ -37,6 +38,7 @@ internal static class HotbarTransfer
         {
             Format = Format, Version = 1, ModuleVersion = moduleVersion,
             ShowAllBars = selected.HasValue ? null : profile.Show,
+            FollowNativeHide = selected.HasValue ? null : profile.FollowNativeHide,
             ShowCommandMessages = selected.HasValue ? null : showCommandMessages,
             Bars = (selected.HasValue ? [profile.Bars[selected.Value]] : profile.Bars)
                 .Select(bar => CopyBar(bar, false)).ToList(),

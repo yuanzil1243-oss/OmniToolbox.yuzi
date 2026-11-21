@@ -143,7 +143,6 @@ public sealed partial class NativeDragHotbar
         var cps = super.RepeatCps;
         if (ImGui.SliderFloat("每秒连点次数", ref cps, 1, 30, "%.1f"))
         { super.RepeatCps = cps; superDirty = true; builtInRepeat.Clear(); superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown); }
-        ImGui.TextWrapped("使用“快捷键”页设置的按键；聊天、切出游戏或编辑界面时暂停，松开后再按即可继续。");
         var repeat = super.AllowKeyRepeater;
         if (ImGui.Checkbox("兼容“按键连点”模块", ref repeat))
         { super.AllowKeyRepeater = repeat; superDirty = true; superEdges.BlockHeld(NativeHotbarBridge.IsKeyDown); }
